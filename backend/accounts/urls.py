@@ -6,7 +6,9 @@ from .views import (
     InviteAdminView, InviteSubAdminView, InviteVolunteerView, InviteGuardianView,
     RegisterInviteFormView, RegisterViaInviteView, BlockCreateView, BlockListView, FlatCreateView, FlatListView,
     MyGatedSocietyView, SocietyUserListView, SocietyUserDeleteView,AdminUserDeleteView,
-    AddResidentView, InviteSecurityView, SendOTPView, VerifyOTPView,
+    AddResidentView, InviteSecurityView, SendOTPView, VerifyOTPView, ForgotPasswordView, ResetPasswordView, TriggerSOSView,
+    SOSListView,MarkNotificationReadView,MyNotificationsView, RegisterDeviceTokenView,
+    AssignSocietyView, SOSNotificationsView, AcceptSOSView, SOSDetailView, UpdateSOSStatusView,
 )
 
 urlpatterns = [
@@ -32,6 +34,7 @@ urlpatterns = [
     path("register/invite/<str:token>/", RegisterInviteFormView.as_view()),  # clickable link lands here
     path("register/invite/", RegisterViaInviteView.as_view()),               # form submits here
 
+    path("assign-society/", AssignSocietyView.as_view()),
     
     path("society/users/", SocietyUserListView.as_view()),
     path("society/users/<int:pk>/delete/", SocietyUserDeleteView.as_view()),
@@ -45,4 +48,22 @@ urlpatterns = [
 
     path("send-otp/", SendOTPView.as_view()),
     path("verify-otp/", VerifyOTPView.as_view()),
+
+    path("forgot-password/", ForgotPasswordView.as_view()),
+    path("reset-password/", ResetPasswordView.as_view()),
+
+    path("sos/trigger/", TriggerSOSView.as_view()),
+    path("sos/mine/", SOSListView.as_view()),
+
+    path("notifications/", MyNotificationsView.as_view()),
+    path("notifications/<int:pk>/read/", MarkNotificationReadView.as_view()),
+
+    path("device-token/register/", RegisterDeviceTokenView.as_view()),
+
+    path("sos/<int:sos_id>/notifications/", SOSNotificationsView.as_view()),
+
+    path("sos/<int:pk>/accept/", AcceptSOSView.as_view()),
+
+    path("sos/<int:pk>/", SOSDetailView.as_view()),
+    path("sos/<int:pk>/status/", UpdateSOSStatusView.as_view()),
 ]

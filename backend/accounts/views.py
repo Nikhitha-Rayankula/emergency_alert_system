@@ -4,13 +4,15 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework_simplejwt.views import TokenObtainPairView
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
-from .models import GatedSociety, Invite, CustomUser, Block, Flat
-from .permissions import IsGatedSocietyAdmin, IsAdmin,IsSubAdmin, IsSubAdminOrAdmin, IsGuardian,IsGuardianOrSubAdmin
+from .models import GatedSociety, Invite, CustomUser, Block, Flat, SOSAlert, Notification
+from .permissions import IsGatedSocietyAdmin, IsAdmin,IsSubAdmin, IsSubAdminOrAdmin, IsGuardian,IsGuardianOrSubAdmin, IsResident, IsSOSResponder
 from .serializers import (
     RegisterSerializer, UpdateProfileSerializer, ProfileSerializer, GatedSocietySerializer,  RegisterViaInviteSerializer,
     InviteAdminSerializer, InviteSubAdminSerializer,
     InviteVolunteerSerializer, InviteGuardianSerializer, BlockSerializer, FlatSerializer,
-    AddResidentSerializer, InviteSecuritySerializer, SendOTPSerializer, VerifyOTPSerializer
+    AddResidentSerializer, InviteSecuritySerializer, SendOTPSerializer, VerifyOTPSerializer,
+    ForgotPasswordSerializer,ResetPasswordSerializer,TriggerSOSSerializer, NotificationSerializer, DeviceTokenSerializer, AssignSocietySerializer,
+    UpdateSOSStatusSerializer, AcceptSOSSerializer, SOSDetailSerializer,
 )
 from django.http import HttpResponse
 from django.views import View
@@ -260,3 +262,118 @@ class SendOTPView(generics.CreateAPIView):
 class VerifyOTPView(generics.CreateAPIView):
     serializer_class = VerifyOTPSerializer
     permission_classes = [AllowAny]
+
+
+class ForgotPasswordView(generics.CreateAPIView):
+    serializer_class = ForgotPasswordSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_serializer_context(self):
+        return {"request": self.request}
+
+    def create(self, request, *args, **kwargs):
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        result = serializer.save()
+        return Response(result, status=status.HTTP_201_CREATED)
+
+
+class ResetPasswordView(generics.CreateAPIView):
+    serializer_class = ResetPasswordSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_serializer_context(self):
+        return {"request": self.request}
+
+
+class TriggerSOSView(generics.CreateAPIView):
+    serializer_class = TriggerSOSSerializer
+    permission_classes = [IsResident]
+
+    def get_serializer_context(self):
+        return {"request": self.request}
+
+
+class SOSListView(generics.ListAPIView):
+    serializer_class = TriggerSOSSerializer
+    permission_classes = [IsResident]
+
+    def get_queryset(self):
+        return SOSAlert.objects.filter(user=self.request.user).order_by("-created_at")
+
+
+class MyNotificationsView(generics.ListAPIView):
+    serializer_class = NotificationSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        return Notification.objects.filter(recipient=self.request.user).order_by("-created_at")
+
+
+class MarkNotificationReadView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def patch(self, request, pk):
+        try:
+            notif = Notification.objects.get(pk=pk, recipient=request.user)
+        except Notification.DoesNotExist:
+            return Response({"detail": "Not found."}, status=404)
+        notif.is_read = True
+        notif.save()
+        return Response({"detail": "Marked as read."})
+
+
+class RegisterDeviceTokenView(generics.CreateAPIView):
+    serializer_class = DeviceTokenSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_serializer_context(self):
+        return {"request": self.request}
+
+
+
+class AssignSocietyView(generics.CreateAPIView):
+    serializer_class = AssignSocietySerializer
+    permission_classes = [IsSubAdminOrAdmin]
+
+    def create(self, request, *args, **kwargs):
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        result = serializer.save()
+        return Response(result, status=status.HTTP_201_CREATED)
+
+class UpdateSOSStatusView(generics.UpdateAPIView):
+    queryset = SOSAlert.objects.all()
+    serializer_class = UpdateSOSStatusSerializer
+    permission_classes = [IsSOSResponder]
+
+class SOSNotificationsView(generics.ListAPIView):
+    serializer_class = NotificationSerializer
+    permission_classes = [IsSubAdminOrAdmin]
+
+    def get_queryset(self):
+        sos = SOSAlert.objects.filter(id=self.kwargs["sos_id"]).first()
+        if not sos:
+            return Notification.objects.none()
+
+        u = self.request.user
+        if u.group.name == "Admin":
+            return Notification.objects.filter(sos_id=self.kwargs["sos_id"])
+
+        # Sub Admin only sees notifications for SOS incidents within their own society
+        if sos.user.gated_society and sos.user.gated_society.sub_admin == u:
+            return Notification.objects.filter(sos_id=self.kwargs["sos_id"])
+
+        return Notification.objects.none()
+
+
+class AcceptSOSView(generics.UpdateAPIView):
+    queryset = SOSAlert.objects.all()
+    serializer_class = AcceptSOSSerializer
+    permission_classes = [IsSOSResponder]
+
+
+class SOSDetailView(generics.RetrieveAPIView):
+    queryset = SOSAlert.objects.all()
+    serializer_class = SOSDetailSerializer
+    permission_classes = [IsSOSResponder]

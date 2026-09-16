@@ -63,3 +63,11 @@ class IsGuardianOrSubAdmin(BasePermission):
     def has_permission(self, request, view):
         u = request.user
         return bool(u.is_authenticated and u.group and u.group.name in ["Guardian", "Sub Admin"])
+
+
+class IsSOSResponder(BasePermission):
+    """Guardian, Security, Volunteer, Sub Admin, or Admin can act on SOS incidents."""
+    def has_permission(self, request, view):
+        u = request.user
+        return bool(u.is_authenticated and u.group and u.group.name in
+                    ["Admin", "Sub Admin", "Guardian", "Security", "Volunteer"])
