@@ -50,9 +50,8 @@ class Flat(models.Model):
     flat_number = models.CharField(max_length=20)
     floor = models.IntegerField(null=True, blank=True)
     flat_type = models.CharField(max_length=20, blank=True)
-    guardian = models.ForeignKey(
-        'CustomUser', on_delete=models.SET_NULL, null=True, blank=True, related_name="guardian_of_flat"
-    )
+    guardian = models.ForeignKey('CustomUser', on_delete=models.SET_NULL, null=True, blank=True, related_name="guardian_of_flat")
+    secondary_guardian = models.ForeignKey('CustomUser', on_delete=models.SET_NULL, null=True, blank=True, related_name="secondary_guardian_of_flat")
 
     def __str__(self):
         return f"{self.block} - {self.flat_number}"
@@ -71,6 +70,9 @@ class CustomUser(AbstractUser):
     gated_society = models.ForeignKey(GatedSociety, on_delete=models.SET_NULL, null=True, blank=True, related_name='residents_in_society')
     flat = models.ForeignKey(Flat, on_delete=models.SET_NULL, null=True, blank=True, related_name="members")
     group = models.ForeignKey('auth.Group', on_delete=models.PROTECT, related_name='profile_users')
+    available = models.BooleanField(default=True)
+    last_latitude = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True)
+    last_longitude = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True)
 
     def __str__(self):
         return self.username
@@ -101,6 +103,8 @@ class SOSAlert(models.Model):
     responder = models.ForeignKey(
         CustomUser, on_delete=models.SET_NULL, null=True, blank=True, related_name='responded_sos'
     )
+    escalation_level = models.IntegerField(default=0)
+    last_stage_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     resolved_at = models.DateTimeField(null=True, blank=True)
 
@@ -139,3 +143,25 @@ class DeviceToken(models.Model):
 
     def __str__(self):
         return f"{self.user.username}'s device"
+
+
+class IncidentHistory(models.Model):
+    sos = models.ForeignKey(SOSAlert, on_delete=models.CASCADE, related_name="history")
+    action = models.CharField(max_length=100)
+    performed_by = models.ForeignKey(CustomUser, on_delete=models.SET_NULL, null=True, blank=True)
+    note = models.TextField(blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+
+class EscalationConfig(models.Model):
+    gated_society = models.OneToOneField(GatedSociety, on_delete=models.CASCADE, related_name="escalation_config")
+    response_timeout_seconds = models.IntegerField(default=60)
+    primary_guardian_enabled = models.BooleanField(default=True)
+    secondary_guardian_enabled = models.BooleanField(default=True)
+    emergency_contact_enabled = models.BooleanField(default=True)
+
+class IncidentMessage(models.Model):
+    sos = models.ForeignKey(SOSAlert, on_delete=models.CASCADE, related_name="messages")
+    sender = models.ForeignKey(CustomUser, on_delete=models.CASCADE)
+    message = models.TextField()
+    created_at = models.DateTimeField(auto_now_add=True)

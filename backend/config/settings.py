@@ -12,6 +12,14 @@ https://docs.djangoproject.com/en/6.1/ref/settings/
 
 from pathlib import Path
 from decouple import config
+from datetime import timedelta
+
+ALLOWED_HOSTS = ["*"]   # dev only, lets your phone reach Django over Wi-Fi
+
+SIMPLE_JWT = {
+    "ACCESS_TOKEN_LIFETIME": timedelta(hours=8),   # default is 5 minutes, which would log you out constantly
+    "REFRESH_TOKEN_LIFETIME": timedelta(days=7),
+}
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -26,7 +34,7 @@ SECRET_KEY = config('SECRET_KEY')
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = config('DEBUG', default=True, cast=bool)
 
-ALLOWED_HOSTS = []
+
 
 
 # Application definition
@@ -42,6 +50,8 @@ INSTALLED_APPS = [
     'rest_framework_simplejwt',
     'corsheaders',
     'accounts',
+    'django_celery_beat',
+    'django_celery_results',
 ]
 
 MIDDLEWARE = [
@@ -54,6 +64,9 @@ MIDDLEWARE = [
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
+
+
+
 
 AUTH_USER_MODEL = 'accounts.CustomUser'
 
@@ -99,19 +112,15 @@ DATABASES = {
     }
 }
 
-MAILERS = {
-    "default": {
-        "BACKEND": "django.core.mail.backends.smtp.EmailBackend",
-        "OPTIONS": {
-            "host": config('EMAIL_HOST'),
-            "port": config('EMAIL_PORT', cast=int),
-            "use_ssl": config('EMAIL_USE_SSL', cast=bool),
-            "username": config('EMAIL_HOST_USER'),
-            "password": config('EMAIL_HOST_PASSWORD'),
-        }
-    }
-}
-DEFAULT_FROM_EMAIL = config('EMAIL_HOST_USER')
+EMAIL_BACKEND = "django.core.mail.backends.smtp.EmailBackend"
+EMAIL_HOST = config('EMAIL_HOST')
+EMAIL_PORT = config('EMAIL_PORT', cast=int)
+EMAIL_USE_SSL = config('EMAIL_USE_SSL', cast=bool)
+EMAIL_HOST_USER = config('EMAIL_HOST_USER')
+EMAIL_HOST_PASSWORD = config('EMAIL_HOST_PASSWORD')
+DEFAULT_FROM_EMAIL = EMAIL_HOST_USER
+
+
 FRONTEND_BASE_URL = config('FRONTEND_BASE_URL')
 
 
@@ -161,3 +170,11 @@ TWILIO_AUTH_TOKEN = config('TWILIO_AUTH_TOKEN')
 TWILIO_PHONE_NUMBER = config('TWILIO_PHONE_NUMBER')
 
 FIREBASE_CREDENTIALS_PATH = BASE_DIR / "firebase-credentials.json"
+
+
+
+CELERY_BROKER_URL = 'redis://localhost:6379/0'
+CELERY_RESULT_BACKEND = 'redis://localhost:6379/0'
+CELERY_BEAT_SCHEDULER = 'django_celery_beat.schedulers:DatabaseScheduler'
+
+

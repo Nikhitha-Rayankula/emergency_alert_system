@@ -1,5 +1,146 @@
+# ==========================================
+# Environment Variables & Secrets
+# ==========================================
 .env
-.venv/
+.env.*
+*.env
+!.env.example
+firebase-credentials.json
+*credentials*.json
+google-services.json
+GoogleService-Info.plist
+*.pem
+*.key
+*.jks
+*.p8
+*.p12
+*.keystore
+*.mobileprovision
+
+# ==========================================
+# Python / Django
+# ==========================================
 __pycache__/
-*.pyc
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+*.manifest
+*.spec
+
+# Virtual Environments
+.venv/
+venv/
+ENV/
+env/
+env.bak/
+venv.bak/
+
+# Django Database & Static/Media
+*.sqlite3
 db.sqlite3
+db.sqlite3-journal
+media/
+staticfiles/
+
+# Celery / Asynchronous Tasks
+celerybeat-schedule
+celerybeat-schedule.db
+celerybeat.pid
+*.pid
+
+# ==========================================
+# Node.js / React Native / Expo Frontend
+# ==========================================
+node_modules/
+.expo/
+web-build/
+expo-env.d.ts
+.kotlin/
+*.orig.*
+.metro-health-check*
+
+# Generated Native Builds
+/ios/
+/android/
+ios/
+android/
+
+# Frontend Environment Files
+.env*.local
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# TypeScript
+*.tsbuildinfo
+
+# ==========================================
+# Logs & Debugging
+# ==========================================
+*.log
+logs/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# ==========================================
+# Testing & Coverage
+# ==========================================
+.coverage
+.coverage.*
+htmlcov/
+.tox/
+.nox/
+.pytest_cache/
+.cache/
+
+# ==========================================
+# IDEs & Code Editors
+# ==========================================
+.vscode/*
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+.idea/
+*.sublime-workspace
+*.sublime-project
+*.swp
+*.swo
+*~
+
+# ==========================================
+# Operating System Artifacts
+# ==========================================
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+
+# Windows
+Thumbs.db
+Thumbs.db:encryptable
+ehthumbs.db
+ehthumbs_vista.db
+[Dd]esktop.ini
+$RECYCLE.BIN/

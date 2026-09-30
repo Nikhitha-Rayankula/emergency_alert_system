@@ -71,3 +71,10 @@ class IsSOSResponder(BasePermission):
         u = request.user
         return bool(u.is_authenticated and u.group and u.group.name in
                     ["Admin", "Sub Admin", "Guardian", "Security", "Volunteer"])
+
+
+class IsIncidentParticipant(BasePermission):
+    def has_permission(self, request, view):
+        u = request.user
+        return bool(u.is_authenticated and u.group and
+                    u.group.name in ["Admin", "Sub Admin", "Guardian", "Security", "Volunteer", "Resident"])

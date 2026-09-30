@@ -1,18 +1,20 @@
-from rest_framework import generics, status
+from rest_framework import generics, status, serializers
 from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework_simplejwt.views import TokenObtainPairView
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
-from .models import GatedSociety, Invite, CustomUser, Block, Flat, SOSAlert, Notification
-from .permissions import IsGatedSocietyAdmin, IsAdmin,IsSubAdmin, IsSubAdminOrAdmin, IsGuardian,IsGuardianOrSubAdmin, IsResident, IsSOSResponder
+from .models import GatedSociety, Invite, CustomUser, Block, Flat, SOSAlert, Notification, IncidentHistory, EscalationConfig, IncidentMessage
+from .permissions import IsGatedSocietyAdmin, IsAdmin,IsSubAdmin, IsSubAdminOrAdmin, IsGuardian,IsGuardianOrSubAdmin, IsResident, IsSOSResponder, IsIncidentParticipant
+from rest_framework.exceptions import PermissionDenied
 from .serializers import (
     RegisterSerializer, UpdateProfileSerializer, ProfileSerializer, GatedSocietySerializer,  RegisterViaInviteSerializer,
     InviteAdminSerializer, InviteSubAdminSerializer,
     InviteVolunteerSerializer, InviteGuardianSerializer, BlockSerializer, FlatSerializer,
     AddResidentSerializer, InviteSecuritySerializer, SendOTPSerializer, VerifyOTPSerializer,
     ForgotPasswordSerializer,ResetPasswordSerializer,TriggerSOSSerializer, NotificationSerializer, DeviceTokenSerializer, AssignSocietySerializer,
-    UpdateSOSStatusSerializer, AcceptSOSSerializer, SOSDetailSerializer,
+    UpdateSOSStatusSerializer, AcceptSOSSerializer, SOSDetailSerializer, ResolveIncidentSerializer, CloseIncidentSerializer, IncidentHistorySerializer,
+    EscalateSOSSerializer, EscalationConfigSerializer, AvailabilitySerializer, LocationSerializer, RejectSOSSerializer, haversine_km, IncidentMessageSerializer,
 )
 from django.http import HttpResponse
 from django.views import View
@@ -23,10 +25,29 @@ from django.views import View
 class RegisterView(generics.CreateAPIView):
     serializer_class = RegisterSerializer
     permission_classes = [AllowAny]
+    authentication_classes = []
 
 
 class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
+    username_field = 'email'
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields['username'] = serializers.CharField(required=False, write_only=True)
+        self.fields['email'] = serializers.CharField(required=False, write_only=True)
+
     def validate(self, attrs):
+        identifier = attrs.get('email') or attrs.get('username')
+        if not identifier:
+            raise serializers.ValidationError({"email": "Email or username is required."})
+        if '@' not in identifier:
+            user = CustomUser.objects.filter(username=identifier).first()
+            if user:
+                attrs['email'] = user.email
+            else:
+                attrs['email'] = identifier
+        else:
+            attrs['email'] = identifier
         data = super().validate(attrs)
         data["user"] = ProfileSerializer(self.user).data
         return data
@@ -34,6 +55,15 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
 
 class LoginView(TokenObtainPairView):
     serializer_class = CustomTokenObtainPairSerializer
+    permission_classes = [AllowAny]
+    authentication_classes = []
+
+
+class GatedSocietyListView(generics.ListAPIView):
+    serializer_class = GatedSocietySerializer
+    permission_classes = [AllowAny]
+    authentication_classes = []
+    queryset = GatedSociety.objects.all().order_by("id")
 
 
 class ProfileUpdateView(generics.UpdateAPIView):
@@ -173,17 +203,35 @@ class RegisterInviteFormView(View):
 class RegisterViaInviteView(generics.CreateAPIView):
     serializer_class = RegisterViaInviteSerializer
     permission_classes = [AllowAny]
+    authentication_classes = []
 
 
 class SocietyUserListView(generics.ListAPIView):
     serializer_class = ProfileSerializer
-    permission_classes = [IsSubAdminOrAdmin]
+    permission_classes = [IsAuthenticated]
 
     def get_queryset(self):
         u = self.request.user
+        if not u.group:
+            return CustomUser.objects.none()
         if u.group.name == "Admin":
-            return CustomUser.objects.all()
-        return CustomUser.objects.filter(gated_society__sub_admin=u)
+            return CustomUser.objects.all().order_by("-id")
+        if u.group.name == "Sub Admin":
+            managed = GatedSociety.objects.filter(sub_admin=u).first()
+            if managed:
+                return CustomUser.objects.filter(gated_society=managed).order_by("-id")
+            if u.gated_society:
+                return CustomUser.objects.filter(gated_society=u.gated_society).order_by("-id")
+            return CustomUser.objects.none()
+        if u.group.name == "Guardian":
+            if u.flat:
+                return CustomUser.objects.filter(flat=u.flat).order_by("-id")
+            if u.gated_society:
+                return CustomUser.objects.filter(gated_society=u.gated_society).order_by("-id")
+            return CustomUser.objects.none()
+        if u.gated_society:
+            return CustomUser.objects.filter(gated_society=u.gated_society).order_by("-id")
+        return CustomUser.objects.none()
 
 class SocietyUserDeleteView(generics.DestroyAPIView):
     serializer_class = ProfileSerializer
@@ -197,9 +245,22 @@ class MyGatedSocietyView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        if not request.user.gated_society:
+        user = request.user
+        society = None
+        if user.gated_society:
+            society = user.gated_society
+        elif user.group and user.group.name == "Sub Admin":
+            society = GatedSociety.objects.filter(sub_admin=user).first()
+        elif user.group and user.group.name == "Admin":
+            society_id = request.query_params.get("society_id")
+            if society_id:
+                society = GatedSociety.objects.filter(id=society_id).first()
+            if not society:
+                society = GatedSociety.objects.first()
+
+        if not society:
             return Response({"detail": "Not assigned to a society yet."}, status=404)
-        return Response(GatedSocietySerializer(request.user.gated_society).data)
+        return Response(GatedSocietySerializer(society).data)
 
 
 class BlockCreateView(generics.CreateAPIView):
@@ -258,15 +319,30 @@ class InviteSecurityView(generics.CreateAPIView):
 class SendOTPView(generics.CreateAPIView):
     serializer_class = SendOTPSerializer
     permission_classes = [AllowAny]
+    authentication_classes = []
+
+    def create(self, request, *args, **kwargs):
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+        return Response({"detail": "Verification code sent to your email."}, status=status.HTTP_200_OK)
 
 class VerifyOTPView(generics.CreateAPIView):
     serializer_class = VerifyOTPSerializer
     permission_classes = [AllowAny]
+    authentication_classes = []
+
+    def create(self, request, *args, **kwargs):
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        result = serializer.save()
+        return Response(result, status=status.HTTP_200_OK)
 
 
 class ForgotPasswordView(generics.CreateAPIView):
     serializer_class = ForgotPasswordSerializer
-    permission_classes = [IsAuthenticated]
+    permission_classes = [AllowAny]
+    authentication_classes = []
 
     def get_serializer_context(self):
         return {"request": self.request}
@@ -275,15 +351,22 @@ class ForgotPasswordView(generics.CreateAPIView):
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         result = serializer.save()
-        return Response(result, status=status.HTTP_201_CREATED)
+        return Response(result, status=status.HTTP_200_OK)
 
 
 class ResetPasswordView(generics.CreateAPIView):
     serializer_class = ResetPasswordSerializer
-    permission_classes = [IsAuthenticated]
+    permission_classes = [AllowAny]
+    authentication_classes = []
 
     def get_serializer_context(self):
         return {"request": self.request}
+
+    def create(self, request, *args, **kwargs):
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        result = serializer.save()
+        return Response(result, status=status.HTTP_200_OK)
 
 
 class TriggerSOSView(generics.CreateAPIView):
@@ -296,10 +379,40 @@ class TriggerSOSView(generics.CreateAPIView):
 
 class SOSListView(generics.ListAPIView):
     serializer_class = TriggerSOSSerializer
-    permission_classes = [IsResident]
+    permission_classes = [IsAuthenticated]
 
     def get_queryset(self):
         return SOSAlert.objects.filter(user=self.request.user).order_by("-created_at")
+
+
+class AllIncidentsListView(generics.ListAPIView):
+    serializer_class = TriggerSOSSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        u = self.request.user
+        if not u.group:
+            return SOSAlert.objects.filter(user=u).order_by("-created_at")
+        if u.group.name == "Admin":
+            return SOSAlert.objects.all().order_by("-created_at")
+        if u.group.name == "Sub Admin":
+            managed = GatedSociety.objects.filter(sub_admin=u).first()
+            if managed:
+                return SOSAlert.objects.filter(user__gated_society=managed).order_by("-created_at")
+            if u.gated_society:
+                return SOSAlert.objects.filter(user__gated_society=u.gated_society).order_by("-created_at")
+            return SOSAlert.objects.filter(user=u).order_by("-created_at")
+        if u.group.name in ["Volunteer", "Security"]:
+            if u.gated_society:
+                return SOSAlert.objects.filter(user__gated_society=u.gated_society).order_by("-created_at")
+            return SOSAlert.objects.all().order_by("-created_at")
+        if u.group.name == "Guardian":
+            if u.flat:
+                return SOSAlert.objects.filter(user__flat=u.flat).order_by("-created_at")
+            if u.gated_society:
+                return SOSAlert.objects.filter(user__gated_society=u.gated_society).order_by("-created_at")
+            return SOSAlert.objects.filter(user=u).order_by("-created_at")
+        return SOSAlert.objects.filter(user=u).order_by("-created_at")
 
 
 class MyNotificationsView(generics.ListAPIView):
@@ -372,8 +485,145 @@ class AcceptSOSView(generics.UpdateAPIView):
     serializer_class = AcceptSOSSerializer
     permission_classes = [IsSOSResponder]
 
+    def get_serializer_context(self):
+        return {"request": self.request}
+
 
 class SOSDetailView(generics.RetrieveAPIView):
-    queryset = SOSAlert.objects.all()
     serializer_class = SOSDetailSerializer
+    permission_classes = [IsIncidentParticipant]
+
+    def get_queryset(self):
+        qs = SOSAlert.objects.all()
+        if self.request.user.group.name == "Resident":
+            qs = qs.filter(user=self.request.user)
+        return qs
+
+class ResolveIncidentView(generics.UpdateAPIView):
+    queryset = SOSAlert.objects.all()
+    serializer_class = ResolveIncidentSerializer
     permission_classes = [IsSOSResponder]
+    def get_serializer_context(self):
+        return {"request": self.request}
+
+
+class CloseIncidentView(generics.UpdateAPIView):
+    queryset = SOSAlert.objects.all()
+    serializer_class = CloseIncidentSerializer
+    permission_classes = [IsSubAdminOrAdmin]
+    def get_serializer_context(self):
+        return {"request": self.request}
+
+
+class IncidentHistoryView(generics.ListAPIView):
+    serializer_class = IncidentHistorySerializer
+    permission_classes = [IsIncidentParticipant]
+
+    def get_queryset(self):
+        qs = IncidentHistory.objects.filter(sos_id=self.kwargs["pk"]).order_by("created_at")
+        if self.request.user.group.name == "Resident":
+            qs = qs.filter(sos__user=self.request.user)
+        return qs
+
+class EscalateIncidentView(generics.UpdateAPIView):
+    queryset = SOSAlert.objects.all()
+    serializer_class = EscalateSOSSerializer
+    permission_classes = [IsSOSResponder]
+    def get_serializer_context(self):
+        return {"request": self.request}
+
+
+class EscalationConfigView(generics.RetrieveUpdateAPIView):
+    serializer_class = EscalationConfigSerializer
+    permission_classes = [IsSubAdminOrAdmin]
+
+    def get_object(self):
+        u = self.request.user
+        society = None
+        if u.group and u.group.name == "Admin":
+            society_id = self.request.query_params.get("society_id")
+            if society_id:
+                society = GatedSociety.objects.filter(id=society_id).first()
+            if not society:
+                society = GatedSociety.objects.first()
+        elif u.group and u.group.name == "Sub Admin":
+            society = GatedSociety.objects.filter(sub_admin=u).first() or u.gated_society
+
+        if not society:
+            from rest_framework.exceptions import ValidationError
+            raise ValidationError("No gated society found for escalation rules configuration.")
+        config, _ = EscalationConfig.objects.get_or_create(gated_society=society)
+        return config
+
+
+class UpdateAvailabilityView(generics.UpdateAPIView):
+    serializer_class = AvailabilitySerializer
+    permission_classes = [IsAuthenticated]
+    def get_object(self):
+        return self.request.user
+    def get_serializer_context(self):
+        return {"request": self.request}
+
+
+class UpdateMyLocationView(generics.UpdateAPIView):
+    serializer_class = LocationSerializer
+    permission_classes = [IsAuthenticated]
+    def get_object(self):
+        return self.request.user
+    def update(self, request, *args, **kwargs):
+        serializer = self.get_serializer(self.get_object(), data=request.data, partial=True)
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+        return Response({"detail": "Location updated successfully."})
+
+
+class RejectSOSView(generics.UpdateAPIView):
+    queryset = SOSAlert.objects.all()
+    serializer_class = RejectSOSSerializer
+    permission_classes = [IsSOSResponder]
+    def get_serializer_context(self):
+        return {"request": self.request}
+
+
+class NearbyIncidentsView(APIView):
+    permission_classes = [IsSOSResponder]
+
+    def get(self, request):
+        lat = float(request.query_params.get("latitude"))
+        lon = float(request.query_params.get("longitude"))
+        radius = float(request.query_params.get("radius", 2000)) / 1000  # meters -> km
+
+        open_incidents = SOSAlert.objects.filter(status="open")
+        nearby = []
+        for sos in open_incidents:
+            dist = haversine_km(lat, lon, sos.latitude, sos.longitude)
+            if dist * 1000 <= float(request.query_params.get("radius", 2000)):
+                data = SOSDetailSerializer(sos).data
+                data["distance_meters"] = round(dist * 1000)
+                nearby.append(data)
+        return Response(sorted(nearby, key=lambda x: x["distance_meters"]))
+
+
+class ResponderAssignmentView(generics.UpdateAPIView):
+    queryset = SOSAlert.objects.all()
+    permission_classes = [IsSubAdminOrAdmin]
+    serializer_class = AcceptSOSSerializer  # reuses accept logic, but triggered by admin on someone's behalf
+
+class IncidentChatView(generics.ListCreateAPIView):
+    serializer_class = IncidentMessageSerializer
+    permission_classes = [IsIncidentParticipant]
+
+    def get_queryset(self):
+        qs = IncidentMessage.objects.filter(sos_id=self.kwargs["pk"]).order_by("created_at")
+        if self.request.user.group.name == "Resident":
+            qs = qs.filter(sos__user=self.request.user)
+        return qs
+
+    def get_serializer_context(self):
+        return {"request": self.request, "sos_id": self.kwargs["pk"]}
+
+    def perform_create(self, serializer):
+        u = self.request.user
+        if u.group.name == "Resident" and not SOSAlert.objects.filter(id=self.kwargs["pk"], user=u).exists():
+            raise PermissionDenied("This is not your incident.")
+        serializer.save()
