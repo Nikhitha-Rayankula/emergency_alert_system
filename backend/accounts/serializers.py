@@ -20,7 +20,7 @@ def log_incident(sos, action, user=None, note=""):
     IncidentHistory.objects.create(sos=sos, action=action, performed_by=user, note=note)
 
 def send_sms(to_number, body):
-    if not to_number:
+    if not to_number or not (getattr(settings, 'TWILIO_ACCOUNT_SID', None) and getattr(settings, 'TWILIO_AUTH_TOKEN', None) and getattr(settings, 'TWILIO_PHONE_NUMBER', None)):
         return False
     try:
         client = Client(settings.TWILIO_ACCOUNT_SID, settings.TWILIO_AUTH_TOKEN)
@@ -252,7 +252,10 @@ class RegisterSerializer(serializers.ModelSerializer):
         user.save()
 
         otp = OTP.generate(user.email, "registration")
-        send_mail("Verify your email", f"Your OTP is {otp.code}. It expires in 5 minutes.", None, [user.email])
+        try:
+            send_mail("Verify your email", f"Your OTP is {otp.code}. It expires in 5 minutes.", None, [user.email])
+        except Exception as e:
+            print(f"Registration OTP email failed to send: {e}")
         return user
 
 
@@ -518,7 +521,10 @@ class SendOTPSerializer(serializers.Serializer):
 
     def create(self, validated_data):
         otp = OTP.generate(validated_data["email"], validated_data["purpose"])
-        send_mail("Your OTP Code", f"Your code is {otp.code}. Expires in 5 minutes.", None, [otp.email])
+        try:
+            send_mail("Your OTP Code", f"Your code is {otp.code}. Expires in 5 minutes.", None, [otp.email])
+        except Exception as e:
+            print(f"OTP email failed to send: {e}")
         return otp
 
 
@@ -558,12 +564,15 @@ class ForgotPasswordSerializer(serializers.Serializer):
     def create(self, validated_data):
         email = validated_data["resolved_email"]
         otp = OTP.generate(email, "forgot_password")
-        send_mail(
-            "Password Reset Code",
-            f"Your password reset code is {otp.code}. It expires in 5 minutes.",
-            None,
-            [email],
-        )
+        try:
+            send_mail(
+                "Password Reset Code",
+                f"Your password reset code is {otp.code}. It expires in 5 minutes.",
+                None,
+                [email],
+            )
+        except Exception as e:
+            print(f"Password reset email failed to send: {e}")
         return {"detail": "Password reset code sent to your email."}
 
 
