@@ -29,10 +29,16 @@ import {
   StatusBadge,
   CategoryBadge,
   Empty,
+  IdBadge,
   C,
   SPACE,
   RADIUS,
   fmt,
+  fmtSosId,
+  fmtSocId,
+  fmtBlkId,
+  fmtFltId,
+  fmtUsrId,
   getCategoryMeta,
 } from '../ui';
 
@@ -278,11 +284,10 @@ export default function IncidentDetail({ route, navigation }) {
       {/* Top Incident Summary Bar */}
       <View style={styles.topSummaryBar}>
         <View style={{ flex: 1 }}>
-          <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
             <CategoryBadge category={sos.category} small />
-            <View style={{ marginLeft: 6 }}>
-              <StatusBadge status={sos.status} small />
-            </View>
+            <StatusBadge status={sos.status} small />
+            <IdBadge id={sos.id} prefix="SOS" size="sm" />
           </View>
           <Text style={styles.residentTitle} numberOfLines={1}>
             {sos.user ? `Emergency for ${sos.user}` : 'Emergency Incident'}
@@ -507,10 +512,11 @@ export default function IncidentDetail({ route, navigation }) {
             <View style={styles.metaDivider} />
 
             <View style={styles.detailRow}>
-              <Text style={styles.detailKey}>Assigned Responder:</Text>
-              <Text style={[styles.detailVal, { color: sos.responder ? C.safeDark : C.muted }]}>
-                {sos.responder || 'Searching for responders...'}
-              </Text>
+              <Text style={styles.detailKey}>Incident Identifier:</Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                <Text style={styles.detailVal}>#{sos.id}</Text>
+                <IdBadge id={sos.id} prefix="SOS" size="sm" />
+              </View>
             </View>
 
             <View style={styles.detailRow}>
@@ -518,9 +524,45 @@ export default function IncidentDetail({ route, navigation }) {
               <Text style={styles.detailVal}>{categoryMeta.label}</Text>
             </View>
 
+            {sos.user_id && (
+              <View style={styles.detailRow}>
+                <Text style={styles.detailKey}>Resident User ID:</Text>
+                <Text style={styles.detailVal}>{fmtUsrId(sos.user_id)} ({sos.user})</Text>
+              </View>
+            )}
+
+            {(sos.society_name || sos.society_id) && (
+              <View style={styles.detailRow}>
+                <Text style={styles.detailKey}>Society:</Text>
+                <Text style={styles.detailVal}>
+                  {sos.society_name || 'Society'} ({fmtSocId(sos.society_id)})
+                </Text>
+              </View>
+            )}
+
+            {(sos.block_name || sos.block_id) && (
+              <View style={styles.detailRow}>
+                <Text style={styles.detailKey}>Tower / Block:</Text>
+                <Text style={styles.detailVal}>
+                  {sos.block_name || 'Block'} ({fmtBlkId(sos.block_id)})
+                </Text>
+              </View>
+            )}
+
+            {(sos.flat_number || sos.flat_id) && (
+              <View style={styles.detailRow}>
+                <Text style={styles.detailKey}>Flat / Apartment:</Text>
+                <Text style={styles.detailVal}>
+                  #{sos.flat_number || sos.flat_id} ({fmtFltId(sos.flat_id)})
+                </Text>
+              </View>
+            )}
+
             <View style={styles.detailRow}>
-              <Text style={styles.detailKey}>Incident ID:</Text>
-              <Text style={styles.detailVal}>#{sos.id}</Text>
+              <Text style={styles.detailKey}>Assigned Responder:</Text>
+              <Text style={[styles.detailVal, { color: sos.responder ? C.safeDark : C.muted }]}>
+                {sos.responder ? `${sos.responder} (${fmtUsrId(sos.responder_id)})` : 'Searching for responders...'}
+              </Text>
             </View>
 
             {sos.resolved_at && (

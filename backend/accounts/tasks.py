@@ -16,13 +16,8 @@ def check_pending_sos():
         status__in=["open", "escalated"], escalation_level__lt=MAX_STAGE
     )
     for sos in pending:
-        level = notify_next_stage(sos)
-        SOSAlert.objects.filter(id=sos.id, status="open").update(status="escalated")
-        if still_pending(sos):
-            log_incident(sos, "auto_escalated", None, f"No response within {timeout}s. Now at stage {level}")
-        sos.refresh_from_db()
-        if sos.status not in ["open", "escalated"]:
-            continue  # someone accepted or it was cancelled in the meantime
+        if not still_pending(sos):
+            continue
 
         config = EscalationConfig.objects.filter(gated_society=sos.user.gated_society).first()
         timeout = config.response_timeout_seconds if config else 60
@@ -32,4 +27,5 @@ def check_pending_sos():
             level = notify_next_stage(sos)
             # Only flip open -> escalated. If someone accepted during sending, don't overwrite it.
             SOSAlert.objects.filter(id=sos.id, status="open").update(status="escalated")
-            log_incident(sos, "auto_escalated", None, f"No response within {timeout}s. Now at stage {level}")
+            if still_pending(sos):
+                log_incident(sos, "auto_escalated", None, f"No response within {timeout}s. Now at stage {level}")

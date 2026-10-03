@@ -15,6 +15,7 @@ from decouple import config
 from datetime import timedelta
 
 ALLOWED_HOSTS = ["*"]   # dev only, lets your phone reach Django over Wi-Fi
+FRONTEND_BASE_URL = config('FRONTEND_BASE_URL', default='http://10.105.169.48:8000')
 
 SIMPLE_JWT = {
     "ACCESS_TOKEN_LIFETIME": timedelta(hours=8),   # default is 5 minutes, which would log you out constantly

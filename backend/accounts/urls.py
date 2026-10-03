@@ -3,7 +3,7 @@ from rest_framework_simplejwt.views import TokenRefreshView
 from .views import (
     RegisterView, LoginView, MeView, ProfileUpdateView, ProfileDeleteView,
     GatedSocietyCreateView, GatedSocietyUpdateView, GatedSocietyDeleteView, GatedSocietyListView,
-    InviteAdminView, InviteSubAdminView, InviteVolunteerView, InviteGuardianView,
+    InviteAdminView, InviteSubAdminView, InviteVolunteerView, InviteGuardianView, InviteListView,
     RegisterInviteFormView, RegisterViaInviteView, BlockCreateView, BlockListView, FlatCreateView, FlatListView,
     MyGatedSocietyView, SocietyUserListView, SocietyUserDeleteView,AdminUserDeleteView,
     AddResidentView, InviteSecurityView, SendOTPView, VerifyOTPView, ForgotPasswordView, ResetPasswordView, TriggerSOSView,
@@ -33,8 +33,9 @@ urlpatterns = [
     path("invite/volunteer/", InviteVolunteerView.as_view()),
     path("invite/guardian/", InviteGuardianView.as_view()),
     path("invite/security/", InviteSecurityView.as_view()),
+    path("invites/", InviteListView.as_view()),
 
-    path("register/invite/<str:token>/", RegisterInviteFormView.as_view()),  # clickable link lands here
+    path("register/invite/<str:token>/", RegisterInviteFormView.as_view()),  # clickable link lands here (JSON + HTML)
     path("register/invite/", RegisterViaInviteView.as_view()),               # form submits here
 
     path("assign-society/", AssignSocietyView.as_view()),

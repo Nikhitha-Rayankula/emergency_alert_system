@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { Text, View, ScrollView, Alert, StyleSheet, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import Header from '../components/Header';
-import { Card, Btn, Field, C, SPACE, RADIUS } from '../ui';
+import { Card, Btn, Field, C, SPACE, RADIUS, IdBadge, fmtSocId, fmtBlkId, fmtFltId, fmtUsrId } from '../ui';
 import { useAuth } from '../AuthContext';
 import api, { errorText } from '../api';
 import { useToast } from '../Toast';
@@ -71,7 +71,7 @@ export default function ProfileScreen({ navigation }) {
     <View style={{ flex: 1, backgroundColor: C.bg }}>
       <Header
         title="My Account"
-        subtitle={`${user?.username} • ${user?.group_name || 'Member'}`}
+        subtitle={`${user?.username} • ${fmtUsrId(user?.id)}`}
       />
 
       <ScrollView contentContainerStyle={{ padding: SPACE.lg, paddingBottom: 50 }} keyboardShouldPersistTaps="handled">
@@ -85,7 +85,10 @@ export default function ProfileScreen({ navigation }) {
             </View>
 
             <View style={{ flex: 1, marginLeft: 14 }}>
-              <Text style={styles.userName}>{user?.username}</Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                <Text style={styles.userName}>{user?.username}</Text>
+                <IdBadge id={user?.id} prefix="USR" size="sm" />
+              </View>
               <Text style={styles.userEmail}>{user?.email}</Text>
               <View style={[styles.roleBadge, { backgroundColor: C.accentSoft }]}>
                 <Text style={[styles.roleBadgeText, { color: C.accentInk }]}>{user?.group_name}</Text>
@@ -95,11 +98,32 @@ export default function ProfileScreen({ navigation }) {
 
           <View style={styles.socDivider} />
 
-          <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-            <Text style={{ color: C.muted, fontSize: 12.5 }}>Assigned Society:</Text>
-            <Text style={{ fontWeight: '700', color: C.ink, fontSize: 12.5 }}>
-              {user?.gated_society ? `Society #${user.gated_society}` : 'Not Assigned'}
-            </Text>
+          <View style={{ gap: 6 }}>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+              <Text style={{ color: C.muted, fontSize: 12.5 }}>Assigned Society:</Text>
+              <Text style={{ fontWeight: '700', color: C.ink, fontSize: 12.5 }}>
+                {user?.society_name || (user?.gated_society ? `Society #${user.gated_society}` : 'Not Assigned')}{' '}
+                {user?.gated_society ? `(${fmtSocId(user.gated_society)})` : ''}
+              </Text>
+            </View>
+
+            {user?.block_name && (
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+                <Text style={{ color: C.muted, fontSize: 12.5 }}>Assigned Block:</Text>
+                <Text style={{ fontWeight: '700', color: C.ink, fontSize: 12.5 }}>
+                  {user.block_name} ({fmtBlkId(user.block_id)})
+                </Text>
+              </View>
+            )}
+
+            {(user?.flat_number || user?.flat) && (
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+                <Text style={{ color: C.muted, fontSize: 12.5 }}>Assigned Flat:</Text>
+                <Text style={{ fontWeight: '700', color: C.ink, fontSize: 12.5 }}>
+                  Flat #{user.flat_number || user.flat} ({fmtFltId(user.flat_id || user.flat)})
+                </Text>
+              </View>
+            )}
           </View>
         </Card>
 

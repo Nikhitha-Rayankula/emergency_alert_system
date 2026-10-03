@@ -154,49 +154,298 @@ class InviteGuardianView(generics.CreateAPIView):
         return {"request": self.request}
 
 
-# ---- Clickable link lands here: a simple HTML registration form ----
+from django.http import HttpResponse, JsonResponse
+from .serializers import (
+    RegisterSerializer, UpdateProfileSerializer, ProfileSerializer, GatedSocietySerializer,  RegisterViaInviteSerializer,
+    InviteAdminSerializer, InviteSubAdminSerializer,
+    InviteVolunteerSerializer, InviteGuardianSerializer, BlockSerializer, FlatSerializer,
+    AddResidentSerializer, InviteSecuritySerializer, SendOTPSerializer, VerifyOTPSerializer,
+    ForgotPasswordSerializer,ResetPasswordSerializer,TriggerSOSSerializer, NotificationSerializer, DeviceTokenSerializer, AssignSocietySerializer,
+    UpdateSOSStatusSerializer, AcceptSOSSerializer, SOSDetailSerializer, ResolveIncidentSerializer, CloseIncidentSerializer, IncidentHistorySerializer,
+    EscalateSOSSerializer, EscalationConfigSerializer, AvailabilitySerializer, LocationSerializer, RejectSOSSerializer, haversine_km, IncidentMessageSerializer,
+    InviteSerializer,
+)
+
+# ---- Clickable link lands here: supports JSON for React Native mobile app and rich HTML for web ----
 
 class RegisterInviteFormView(View):
     def get(self, request, token):
         try:
             invite = Invite.objects.get(token=token, is_used=False)
         except Invite.DoesNotExist:
-            return HttpResponse("<h2>This invite link is invalid or already used.</h2>", status=400)
+            if request.headers.get("accept") == "application/json" or request.GET.get("format") == "json" or request.GET.get("json") == "true":
+                return JsonResponse({"detail": "This invite link is invalid or has already been used.", "valid": False}, status=400)
+            return HttpResponse("""
+                <!DOCTYPE html>
+                <html><head><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>Invalid Invitation</title>
+                <style>body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:#F8FAFC;display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0;padding:20px;box-sizing:border-box;}
+                .card{background:#fff;padding:30px;border-radius:16px;box-shadow:0 10px 25px rgba(0,0,0,0.08);max-width:420px;width:100%;text-align:center;}
+                .icon{width:56px;height:56px;border-radius:28px;background:#FEE2E2;color:#DC2626;display:flex;align-items:center;justify-content:center;margin:0 auto 16px;font-size:24px;font-weight:bold;}
+                h2{color:#0F172A;margin:0 0 8px;font-size:20px;}p{color:#64748B;font-size:14px;line-height:1.5;margin:0;}</style>
+                </head><body><div class="card"><div class="icon">✕</div><h2>Invalid Invitation</h2><p>This invitation link is invalid or has already been used. Please contact your society administrator for a new invitation.</p></div></body></html>
+            """, status=400)
+
+        # JSON response for Mobile React Native / API
+        if request.headers.get("accept") == "application/json" or request.GET.get("format") == "json" or request.GET.get("json") == "true":
+            return JsonResponse({
+                "valid": True,
+                "invite_id": invite.id,
+                "email": invite.email,
+                "role": invite.group.name,
+                "society_id": invite.gated_society.id if invite.gated_society else None,
+                "society_name": invite.gated_society.society_name if invite.gated_society else None,
+                "block_id": invite.flat.block.id if invite.flat and invite.flat.block else None,
+                "block_name": invite.flat.block.name if invite.flat and invite.flat.block else None,
+                "block_code": invite.flat.block.code if invite.flat and invite.flat.block else None,
+                "flat_id": invite.flat.id if invite.flat else None,
+                "flat_number": invite.flat.flat_number if invite.flat else None,
+                "created_at": invite.created_at.isoformat(),
+            })
+
+        # Rich Mobile & Web HTML Page
+        soc_text = f"{invite.gated_society.society_name} (ID: {invite.gated_society.id})" if invite.gated_society else "Platform"
+        blk_text = f"{invite.flat.block.name} (ID: {invite.flat.block.id})" if (invite.flat and invite.flat.block) else "N/A"
+        flt_text = f"Flat #{invite.flat.flat_number} (ID: {invite.flat.id})" if invite.flat else "N/A"
 
         html = f"""
-        <html><body style="font-family:sans-serif;max-width:400px;margin:60px auto;">
-        <h2>Complete your registration</h2>
-        <p>Email: <b>{invite.email}</b> &nbsp; Role: <b>{invite.group.name}</b></p>
-        <form id="regForm">
-            <input type="hidden" id="token" value="{token}">
-            <input type="hidden" id="email" value="{invite.email}">
-            <label>Username</label><br>
-            <input type="text" id="username" required style="width:100%;padding:8px;margin:6px 0;"><br>
-            <label>Password</label><br>
-            <input type="password" id="password" required style="width:100%;padding:8px;margin:6px 0;"><br>
-            <button type="submit" style="padding:10px 20px;margin-top:10px;">Register</button>
-        </form>
-        <p id="result"></p>
-        <script>
-        document.getElementById('regForm').addEventListener('submit', async function(e) {{
-            e.preventDefault();
-            const res = await fetch('/api/auth/register/invite/', {{
-                method: 'POST',
-                headers: {{'Content-Type': 'application/json'}},
-                body: JSON.stringify({{
-                    token: document.getElementById('token').value,
-                    email: document.getElementById('email').value,
-                    username: document.getElementById('username').value,
-                    password: document.getElementById('password').value
-                }})
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <meta charset="utf-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <title>Complete Your CERP Registration</title>
+            <style>
+                body {{
+                    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+                    background: #F1F5F9;
+                    margin: 0;
+                    padding: 24px 16px;
+                    display: flex;
+                    justify-content: center;
+                    align-items: center;
+                    min-height: 100vh;
+                    box-sizing: border-box;
+                }}
+                .card {{
+                    background: #FFFFFF;
+                    max-width: 440px;
+                    width: 100%;
+                    border-radius: 18px;
+                    box-shadow: 0 12px 30px rgba(15, 23, 42, 0.09);
+                    padding: 28px 24px;
+                    box-sizing: border-box;
+                }}
+                .badge {{
+                    display: inline-block;
+                    background: #EFF6FF;
+                    color: #2563EB;
+                    font-size: 11px;
+                    font-weight: 800;
+                    padding: 4px 10px;
+                    border-radius: 999px;
+                    text-transform: uppercase;
+                    letter-spacing: 0.5px;
+                    margin-bottom: 12px;
+                }}
+                h2 {{
+                    color: #0F172A;
+                    font-size: 22px;
+                    font-weight: 800;
+                    margin: 0 0 6px;
+                }}
+                .subhead {{
+                    color: #64748B;
+                    font-size: 13.5px;
+                    margin-bottom: 18px;
+                    line-height: 1.4;
+                }}
+                .info-box {{
+                    background: #F8FAFC;
+                    border: 1.5px solid #E2E8F0;
+                    border-radius: 12px;
+                    padding: 14px;
+                    margin-bottom: 20px;
+                    font-size: 13px;
+                }}
+                .info-row {{
+                    display: flex;
+                    justify-content: space-between;
+                    margin-bottom: 6px;
+                }}
+                .info-row:last-child {{
+                    margin-bottom: 0;
+                }}
+                .info-label {{
+                    color: #64748B;
+                    font-weight: 600;
+                }}
+                .info-val {{
+                    color: #0F172A;
+                    font-weight: 700;
+                }}
+                .app-btn {{
+                    display: block;
+                    background: #2563EB;
+                    color: #FFFFFF;
+                    text-align: center;
+                    padding: 12px;
+                    border-radius: 10px;
+                    text-decoration: none;
+                    font-weight: 700;
+                    font-size: 14px;
+                    margin-bottom: 18px;
+                }}
+                .divider {{
+                    display: flex;
+                    align-items: center;
+                    text-align: center;
+                    margin: 16px 0;
+                    color: #94A3B8;
+                    font-size: 12px;
+                    font-weight: 600;
+                }}
+                .divider::before, .divider::after {{
+                    content: '';
+                    flex: 1;
+                    border-bottom: 1px solid #E2E8F0;
+                }}
+                .divider:not(:empty)::before {{ margin-right: .5em; }}
+                .divider:not(:empty)::after {{ margin-left: .5em; }}
+                label {{
+                    display: block;
+                    font-size: 12.5px;
+                    font-weight: 700;
+                    color: #334155;
+                    margin-bottom: 5px;
+                }}
+                input {{
+                    width: 100%;
+                    padding: 11px 13px;
+                    border: 1.5px solid #CBD5E1;
+                    border-radius: 10px;
+                    font-size: 14px;
+                    box-sizing: border-box;
+                    margin-bottom: 14px;
+                    outline: none;
+                    transition: border-color 0.2s;
+                }}
+                input:focus {{
+                    border-color: #2563EB;
+                }}
+                button.submit-btn {{
+                    width: 100%;
+                    background: #0F172A;
+                    color: #FFFFFF;
+                    border: none;
+                    padding: 13px;
+                    border-radius: 10px;
+                    font-size: 14.5px;
+                    font-weight: 700;
+                    cursor: pointer;
+                    margin-top: 6px;
+                }}
+                #result {{
+                    margin-top: 14px;
+                    font-size: 13.5px;
+                    font-weight: 600;
+                    text-align: center;
+                    border-radius: 8px;
+                    padding: 10px;
+                    display: none;
+                }}
+                .success {{ background: #DCFCE7; color: #15803D; display: block !important; }}
+                .error {{ background: #FEE2E2; color: #B91C1C; display: block !important; }}
+            </style>
+        </head>
+        <body>
+            <div class="card">
+                <span class="badge">Official Invitation</span>
+                <h2>Join Emergency Network</h2>
+                <p class="subhead">You are invited to join the Community Emergency Response Platform.</p>
+
+                <div class="info-box">
+                    <div class="info-row">
+                        <span class="info-label">Invited Email:</span>
+                        <span class="info-val">{invite.email}</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">Assigned Role:</span>
+                        <span class="info-val">{invite.group.name}</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">Society:</span>
+                        <span class="info-val">{soc_text}</span>
+                    </div>
+                    {"<div class='info-row'><span class='info-label'>Block:</span><span class='info-val'>" + blk_text + "</span></div>" if invite.flat else ""}
+                    {"<div class='info-row'><span class='info-label'>Flat:</span><span class='info-val'>" + flt_text + "</span></div>" if invite.flat else ""}
+                </div>
+
+                <a href="sosapp://register?token={token}" class="app-btn">📲 Open in CERP Mobile App</a>
+
+                <div class="divider">OR REGISTER IN BROWSER</div>
+
+                <form id="regForm">
+                    <input type="hidden" id="token" value="{token}">
+                    <input type="hidden" id="email" value="{invite.email}">
+
+                    <label for="username">Choose Username</label>
+                    <input type="text" id="username" required placeholder="e.g. rahul_sharma">
+
+                    <label for="mobile">Mobile Number (Optional)</label>
+                    <input type="tel" id="mobile" placeholder="+91 9876543210">
+
+                    <label for="password">Create Password (min 8 chars)</label>
+                    <input type="password" id="password" minlength="8" required placeholder="••••••••">
+
+                    <button type="submit" class="submit-btn" id="subBtn">Complete Registration</button>
+                </form>
+
+                <div id="result"></div>
+            </div>
+
+            <script>
+            document.getElementById('regForm').addEventListener('submit', async function(e) {{
+                e.preventDefault();
+                const btn = document.getElementById('subBtn');
+                const resEl = document.getElementById('result');
+                btn.disabled = true;
+                btn.innerText = 'Creating account...';
+                resEl.className = '';
+                resEl.style.display = 'none';
+
+                try {{
+                    const res = await fetch('/api/auth/register/invite/', {{
+                        method: 'POST',
+                        headers: {{'Content-Type': 'application/json'}},
+                        body: JSON.stringify({{
+                            token: document.getElementById('token').value,
+                            email: document.getElementById('email').value,
+                            username: document.getElementById('username').value,
+                            mobile: document.getElementById('mobile').value,
+                            password: document.getElementById('password').value
+                        }})
+                    }});
+                    const data = await res.json();
+                    if (res.ok) {{
+                        resEl.className = 'success';
+                        resEl.innerText = '🎉 Registration complete! You can now open the app and log in.';
+                        document.getElementById('regForm').style.display = 'none';
+                    }} else {{
+                        resEl.className = 'error';
+                        resEl.innerText = data.detail || (typeof data === 'object' ? Object.values(data).flat().join(' ') : JSON.stringify(data));
+                        btn.disabled = false;
+                        btn.innerText = 'Complete Registration';
+                    }}
+                }} catch (err) {{
+                    resEl.className = 'error';
+                    resEl.innerText = 'Network error. Please try again.';
+                    btn.disabled = false;
+                    btn.innerText = 'Complete Registration';
+                }}
             }});
-            const data = await res.json();
-            document.getElementById('result').innerText = res.ok
-                ? 'Registered successfully! You can now log in.'
-                : JSON.stringify(data);
-        }});
-        </script>
-        </body></html>
+            </script>
+        </body>
+        </html>
         """
         return HttpResponse(html)
 
@@ -204,6 +453,24 @@ class RegisterViaInviteView(generics.CreateAPIView):
     serializer_class = RegisterViaInviteSerializer
     permission_classes = [AllowAny]
     authentication_classes = []
+
+
+class InviteListView(generics.ListAPIView):
+    serializer_class = InviteSerializer
+    permission_classes = [IsSubAdminOrAdmin]
+
+    def get_queryset(self):
+        u = self.request.user
+        if not u.group:
+            return Invite.objects.none()
+        if u.group.name == "Admin":
+            return Invite.objects.all().order_by("-created_at")
+        elif u.group.name == "Sub Admin":
+            managed = GatedSociety.objects.filter(sub_admin=u).first() or u.gated_society
+            if managed:
+                return Invite.objects.filter(gated_society=managed).order_by("-created_at")
+            return Invite.objects.filter(invited_by=u).order_by("-created_at")
+        return Invite.objects.none()
 
 
 class SocietyUserListView(generics.ListAPIView):
@@ -279,10 +546,11 @@ class BlockCreateView(generics.CreateAPIView):
 
 class BlockListView(generics.ListAPIView):
     serializer_class = BlockSerializer
-    permission_classes = [IsAuthenticated]
+    permission_classes = [AllowAny]
+    authentication_classes = []
 
     def get_queryset(self):
-        return Block.objects.filter(gated_society_id=self.kwargs["society_id"])
+        return Block.objects.filter(gated_society_id=self.kwargs["society_id"]).order_by("id")
 
 
 class FlatCreateView(generics.CreateAPIView):
@@ -293,10 +561,11 @@ class FlatCreateView(generics.CreateAPIView):
 
 class FlatListView(generics.ListAPIView):
     serializer_class = FlatSerializer
-    permission_classes = [IsAuthenticated]
+    permission_classes = [AllowAny]
+    authentication_classes = []
 
     def get_queryset(self):
-        return Flat.objects.filter(block_id=self.kwargs["block_id"])
+        return Flat.objects.filter(block_id=self.kwargs["block_id"]).order_by("id")
 
 
 class AddResidentView(generics.CreateAPIView):

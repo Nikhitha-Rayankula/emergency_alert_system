@@ -12,7 +12,7 @@ import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import Header from '../components/Header';
 import ActionModal from '../components/ActionModal';
-import { Card, Btn, Chip, Field, Empty, SkeletonList, C, SPACE, RADIUS } from '../ui';
+import { Card, Btn, Chip, Field, Empty, SkeletonList, C, SPACE, RADIUS, IdBadge, fmtSocId, fmtBlkId, fmtFltId } from '../ui';
 import { useAuth } from '../AuthContext';
 import { useToast } from '../Toast';
 import api, { errorText } from '../api';
@@ -46,16 +46,24 @@ export default function SocietyStructureScreen({ navigation }) {
 
       if (socRes.data?.id) {
         const { data } = await api.get(`/societies/${socRes.data.id}/blocks/`);
-        setBlocks(data || []);
-        if (data && data.length > 0 && !selectedBlock) {
-          setSelectedBlock(data[0]);
+        const blockList = Array.isArray(data) ? data : (data?.results || []);
+        setBlocks(blockList);
+        if (blockList.length > 0) {
+          // If current selected block exists in new list, keep it, else select first
+          setSelectedBlock((prev) => {
+            const found = blockList.find((b) => b.id === prev?.id);
+            return found || blockList[0];
+          });
+        } else {
+          setSelectedBlock(null);
+          setFlats([]);
         }
       }
     } catch (e) {
       console.log('Structure load error:', e.message);
     }
     setLoadingBlocks(false);
-  }, [selectedBlock]);
+  }, []);
 
   // Load flats for selected block
   const loadFlats = useCallback(async (blockId) => {
@@ -63,7 +71,8 @@ export default function SocietyStructureScreen({ navigation }) {
     setLoadingFlats(true);
     try {
       const { data } = await api.get(`/blocks/${blockId}/flats/`);
-      setFlats(data || []);
+      const flatList = Array.isArray(data) ? data : (data?.results || []);
+      setFlats(flatList);
     } catch (e) {
       console.log('Flats load error:', e.message);
     }
@@ -139,19 +148,22 @@ export default function SocietyStructureScreen({ navigation }) {
     <View style={{ flex: 1, backgroundColor: C.bg }}>
       <Header
         title="Blocks & Flats"
-        subtitle={society?.society_name || 'Society Tower Infrastructure'}
+        subtitle={society ? `${society.society_name} • ${fmtSocId(society.id)}` : 'Tower Infrastructure'}
         onRefresh={loadBlocks}
       />
 
       {/* Blocks Horizontal Selector */}
       <View style={styles.blockSection}>
         <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>Towers / Blocks ({blocks.length})</Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+            <Text style={styles.sectionTitle}>Towers / Blocks ({blocks.length})</Text>
+            {society && <IdBadge id={society.id} prefix="SOC" size="sm" />}
+          </View>
           <TouchableOpacity
             style={styles.addSmallBtn}
             onPress={() => setAddBlockModal(true)}
           >
-            <Ionicons name="add" size={16} color={C.accent} />
+            <Ionicons name="add-circle" size={18} color={C.accent} />
             <Text style={styles.addSmallBtnText}>Add Block</Text>
           </TouchableOpacity>
         </View>
@@ -160,10 +172,10 @@ export default function SocietyStructureScreen({ navigation }) {
           <SkeletonList rows={1} />
         ) : blocks.length === 0 ? (
           <Card style={{ marginHorizontal: SPACE.lg, alignItems: 'center', padding: SPACE.md }}>
-            <Text style={{ color: C.muted, fontSize: 13 }}>No blocks configured yet.</Text>
+            <Text style={{ color: C.muted, fontSize: 13 }}>No blocks configured in this society yet.</Text>
             <Btn
               title="+ Create First Block"
-              small
+              size="sm"
               kind="soft"
               onPress={() => setAddBlockModal(true)}
               style={{ marginTop: 8 }}
@@ -189,13 +201,18 @@ export default function SocietyStructureScreen({ navigation }) {
                 >
                   <Ionicons
                     name="business"
-                    size={16}
+                    size={15}
                     color={isSelected ? '#fff' : C.ink3}
                     style={{ marginRight: 6 }}
                   />
                   <Text style={[styles.blockPillText, isSelected && { color: '#fff' }]}>
-                    {blk.name} ({blk.code})
+                    {blk.name}
                   </Text>
+                  <View style={[styles.blkIdBadge, isSelected && { backgroundColor: 'rgba(255,255,255,0.2)' }]}>
+                    <Text style={[styles.blkIdText, isSelected && { color: '#fff' }]}>
+                      {fmtBlkId(blk.id)}
+                    </Text>
+                  </View>
                 </TouchableOpacity>
               );
             })}
@@ -205,13 +222,20 @@ export default function SocietyStructureScreen({ navigation }) {
 
       {/* Flats Section */}
       <View style={styles.flatsHeader}>
-        <Text style={styles.sectionTitle}>
-          Flats in {selectedBlock?.name || 'Selected Block'} ({flats.length})
-        </Text>
+        <View>
+          <Text style={styles.sectionTitle}>
+            Flats in {selectedBlock?.name || 'Selected Block'} ({flats.length})
+          </Text>
+          {selectedBlock && (
+            <Text style={styles.flatsHierarchyBreadcrumb}>
+              {society?.society_name} ({fmtSocId(society?.id)}) → {selectedBlock.name} ({fmtBlkId(selectedBlock.id)})
+            </Text>
+          )}
+        </View>
         {selectedBlock && (
           <Btn
             title="+ Add Flat"
-            small
+            size="sm"
             kind="primary"
             onPress={() => setAddFlatModal(true)}
             icon={<Ionicons name="add" size={16} color="#fff" />}
@@ -233,7 +257,7 @@ export default function SocietyStructureScreen({ navigation }) {
               title="No Flats Added"
               text={
                 selectedBlock
-                  ? `There are no flats in ${selectedBlock.name} yet. Tap "+ Add Flat" to register apartments.`
+                  ? `There are no flats in ${selectedBlock.name} (${fmtBlkId(selectedBlock.id)}) yet. Tap "+ Add Flat" to register apartments.`
                   : 'Please create or select a block above.'
               }
               icon={<Ionicons name="home-outline" size={32} color={C.accent} />}
@@ -243,21 +267,26 @@ export default function SocietyStructureScreen({ navigation }) {
         renderItem={({ item }) => (
           <Card style={styles.flatCard}>
             <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-              <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
                 <View style={styles.flatIconWrap}>
-                  <Ionicons name="home" size={20} color={C.accentInk} />
+                  <Ionicons name="home" size={20} color={C.accent} />
                 </View>
-                <View style={{ marginLeft: 12 }}>
-                  <Text style={styles.flatNumber}>Flat #{item.flat_number}</Text>
+                <View style={{ marginLeft: 12, flex: 1 }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                    <Text style={styles.flatNumber}>Flat #{item.flat_number}</Text>
+                    <IdBadge id={item.id} prefix="FLT" size="sm" />
+                  </View>
                   <Text style={styles.flatSub}>
-                    {item.floor ? `Floor ${item.floor}` : 'Ground / Level'} • {item.flat_type || 'Residential'}
+                    {item.floor ? `Floor ${item.floor}` : 'Ground / Level'} • {item.flat_type || 'Residential'} • {selectedBlock?.name} ({fmtBlkId(selectedBlock?.id)})
                   </Text>
                 </View>
               </View>
 
               <View style={styles.guardianInfo}>
                 <Text style={styles.guardianLabel}>Flat Guardian</Text>
-                <Text style={styles.guardianVal}>{item.guardian || 'Unassigned'}</Text>
+                <Text style={styles.guardianVal}>
+                  {item.guardian_username || item.guardian || 'Unassigned'}
+                </Text>
               </View>
             </View>
           </Card>
@@ -274,6 +303,14 @@ export default function SocietyStructureScreen({ navigation }) {
         loading={busy}
         onSubmit={handleAddBlock}
       >
+        {society && (
+          <View style={styles.modalHierarchyBox}>
+            <Text style={styles.modalHierarchyLabel}>Parent Society:</Text>
+            <Text style={styles.modalHierarchyVal}>
+              {society.society_name} ({fmtSocId(society.id)})
+            </Text>
+          </View>
+        )}
         <Field
           label="Block Name"
           value={blockForm.name}
@@ -298,6 +335,14 @@ export default function SocietyStructureScreen({ navigation }) {
         loading={busy}
         onSubmit={handleAddFlat}
       >
+        <View style={styles.modalHierarchyBox}>
+          <Text style={styles.modalHierarchyLabel}>Hierarchy Assignment:</Text>
+          <Text style={styles.modalHierarchyVal}>
+            Society: {society?.society_name || 'Society'} ({fmtSocId(society?.id)}){'\n'}
+            Block: {selectedBlock?.name || 'Block'} ({fmtBlkId(selectedBlock?.id)})
+          </Text>
+        </View>
+
         <Field
           label="Flat / Door Number"
           value={flatForm.flat_number}
@@ -344,12 +389,12 @@ const styles = StyleSheet.create({
   addSmallBtn: {
     flexDirection: 'row',
     alignItems: 'center',
+    gap: 4,
   },
   addSmallBtnText: {
     fontSize: 12.5,
     fontWeight: '700',
     color: C.accent,
-    marginLeft: 3,
   },
   blockPill: {
     flexDirection: 'row',
@@ -357,10 +402,11 @@ const styles = StyleSheet.create({
     backgroundColor: '#F8FAFC',
     borderWidth: 1.2,
     borderColor: C.line,
-    paddingHorizontal: 14,
-    paddingVertical: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
     borderRadius: RADIUS.pill,
     marginRight: 8,
+    gap: 4,
   },
   blockPillActive: {
     backgroundColor: C.ink,
@@ -371,6 +417,17 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: C.ink2,
   },
+  blkIdBadge: {
+    backgroundColor: '#E2E8F0',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: RADIUS.pill,
+  },
+  blkIdText: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: C.ink,
+  },
   flatsHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -378,6 +435,12 @@ const styles = StyleSheet.create({
     paddingHorizontal: SPACE.lg,
     paddingTop: SPACE.lg,
     paddingBottom: SPACE.sm,
+  },
+  flatsHierarchyBreadcrumb: {
+    fontSize: 11.5,
+    fontWeight: '600',
+    color: C.muted,
+    marginTop: 2,
   },
   flatCard: {
     padding: SPACE.md,
@@ -403,6 +466,7 @@ const styles = StyleSheet.create({
   },
   guardianInfo: {
     alignItems: 'flex-end',
+    marginLeft: 8,
   },
   guardianLabel: {
     fontSize: 10.5,
@@ -415,5 +479,26 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: C.safeDark,
     marginTop: 2,
+  },
+  modalHierarchyBox: {
+    backgroundColor: '#EFF6FF',
+    borderWidth: 1,
+    borderColor: '#BFDBFE',
+    borderRadius: RADIUS.sm,
+    padding: 10,
+    marginBottom: SPACE.md,
+  },
+  modalHierarchyLabel: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: C.accent,
+    textTransform: 'uppercase',
+  },
+  modalHierarchyVal: {
+    fontSize: 12.5,
+    fontWeight: '700',
+    color: C.ink,
+    marginTop: 2,
+    lineHeight: 18,
   },
 });

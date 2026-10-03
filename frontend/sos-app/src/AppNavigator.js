@@ -132,6 +132,19 @@ function RoleTabs() {
   );
 }
 
+const linking = {
+  prefixes: ['sosapp://', 'exp://', 'http://localhost:8081'],
+  config: {
+    screens: {
+      Login: 'login',
+      Register: 'register',
+      ForgotPassword: 'forgot-password',
+      IncidentDetail: 'incident/:id',
+      Alerts: 'alerts',
+    },
+  },
+};
+
 export default function AppNavigator() {
   const { user, loading } = useAuth();
 
@@ -144,7 +157,7 @@ export default function AppNavigator() {
   }
 
   return (
-    <NavigationContainer>
+    <NavigationContainer linking={linking}>
       <Stack.Navigator
         screenOptions={{
           headerStyle: { backgroundColor: '#FFFFFF' },

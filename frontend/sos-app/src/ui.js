@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, TouchableOpacity, TextInput, ActivityIndicator, StyleSheet, Dimensions } from 'react-native';
+import { View, Text, TouchableOpacity, TextInput, ActivityIndicator, StyleSheet, Dimensions, Platform } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 
@@ -88,14 +88,191 @@ export function getUserDisplayName(user) {
   return 'Member';
 }
 
+// ---- Standardized Entity ID Formatters (Part 2 & Part 13) ----
+export const fmtSocId = (id) => {
+  if (!id && id !== 0) return 'SOC-???';
+  const s = String(id).trim();
+  return s.toUpperCase().startsWith('SOC-') ? s.toUpperCase() : `SOC-${s.padStart(3, '0')}`;
+};
+
+export const fmtBlkId = (id) => {
+  if (!id && id !== 0) return 'BLK-???';
+  const s = String(id).trim();
+  return s.toUpperCase().startsWith('BLK-') ? s.toUpperCase() : `BLK-${s.padStart(3, '0')}`;
+};
+
+export const fmtFltId = (id) => {
+  if (!id && id !== 0) return 'FLT-???';
+  const s = String(id).trim();
+  return s.toUpperCase().startsWith('FLT-') ? s.toUpperCase() : `FLT-${s.padStart(3, '0')}`;
+};
+
+export const fmtUsrId = (id) => {
+  if (!id && id !== 0) return 'USR-???';
+  const s = String(id).trim();
+  return s.toUpperCase().startsWith('USR-') ? s.toUpperCase() : `USR-${s.padStart(3, '0')}`;
+};
+
+export const fmtInvId = (id) => {
+  if (!id && id !== 0) return 'INV-???';
+  const s = String(id).trim();
+  return s.toUpperCase().startsWith('INV-') ? s.toUpperCase() : `INV-${s.padStart(3, '0')}`;
+};
+
+export const fmtSosId = (id) => {
+  if (!id && id !== 0) return 'SOS-???';
+  const s = String(id).trim();
+  return s.startsWith('SOS') ? s : `SOS #${s}`;
+};
+
+export const IdBadge = ({ type, prefix, id, label, color, bg, style, size }) => {
+  const kind = (prefix || type || 'id').toLowerCase();
+  let displayId = id;
+  if (kind.startsWith('soc')) displayId = fmtSocId(id);
+  else if (kind.startsWith('blk')) displayId = fmtBlkId(id);
+  else if (kind.startsWith('flt')) displayId = fmtFltId(id);
+  else if (kind.startsWith('usr')) displayId = fmtUsrId(id);
+  else if (kind.startsWith('inv')) displayId = fmtInvId(id);
+  else if (kind.startsWith('sos')) displayId = fmtSosId(id);
+
+  return (
+    <View
+      style={[
+        {
+          flexDirection: 'row',
+          alignItems: 'center',
+          backgroundColor: bg || '#F1F5F9',
+          paddingHorizontal: size === 'sm' ? 5 : 7,
+          paddingVertical: size === 'sm' ? 2 : 3,
+          borderRadius: RADIUS.xs,
+          borderWidth: 1,
+          borderColor: '#E2E8F0',
+          alignSelf: 'flex-start',
+        },
+        style,
+      ]}
+    >
+      {label ? (
+        <Text style={{ fontSize: size === 'sm' ? 9.5 : 10.5, fontWeight: '700', color: '#64748B', marginRight: 4 }}>
+          {label}:
+        </Text>
+      ) : null}
+      <Text
+        style={{
+          fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
+          fontSize: size === 'sm' ? 10 : 11,
+          fontWeight: '800',
+          color: color || '#0F172A',
+          letterSpacing: 0.3,
+        }}
+      >
+        {displayId}
+      </Text>
+    </View>
+  );
+};
+
+export const HierarchySummary = ({
+  societyName,
+  societyId,
+  blockName,
+  blockId,
+  flatNumber,
+  flatId,
+  role,
+  title = 'Entity Hierarchy Context',
+  style,
+}) => (
+  <View
+    style={[
+      {
+        backgroundColor: '#F8FAFC',
+        borderWidth: 1.5,
+        borderColor: '#E2E8F0',
+        borderRadius: RADIUS.md,
+        padding: SPACE.md,
+        marginBottom: SPACE.md,
+      },
+      style,
+    ]}
+  >
+    {title ? (
+      <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 10 }}>
+        <Ionicons name="git-network-outline" size={16} color={C.accent} style={{ marginRight: 6 }} />
+        <Text style={{ fontSize: 12.5, fontWeight: '800', color: C.ink, textTransform: 'uppercase', letterSpacing: 0.5 }}>
+          {title}
+        </Text>
+      </View>
+    ) : null}
+
+    {societyName || societyId ? (
+      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+        <Text style={{ fontSize: 12.5, color: '#64748B', fontWeight: '600' }}>Society:</Text>
+        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+          <Text style={{ fontSize: 13, fontWeight: '700', color: C.ink, marginRight: 6 }}>
+            {societyName || 'Assigned Society'}
+          </Text>
+          {societyId ? <IdBadge type="soc" id={societyId} /> : null}
+        </View>
+      </View>
+    ) : null}
+
+    {blockName || blockId ? (
+      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+        <Text style={{ fontSize: 12.5, color: '#64748B', fontWeight: '600' }}>Block / Tower:</Text>
+        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+          <Text style={{ fontSize: 13, fontWeight: '700', color: C.ink, marginRight: 6 }}>
+            {blockName || 'Assigned Block'}
+          </Text>
+          {blockId ? <IdBadge type="blk" id={blockId} /> : null}
+        </View>
+      </View>
+    ) : null}
+
+    {flatNumber || flatId ? (
+      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+        <Text style={{ fontSize: 12.5, color: '#64748B', fontWeight: '600' }}>Flat / Unit:</Text>
+        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+          <Text style={{ fontSize: 13, fontWeight: '700', color: C.ink, marginRight: 6 }}>
+            #{flatNumber || flatId}
+          </Text>
+          {flatId ? <IdBadge type="flt" id={flatId} /> : null}
+        </View>
+      </View>
+    ) : null}
+
+    {role ? (
+      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 2, paddingTop: 6, borderTopWidth: 1, borderTopColor: '#E2E8F0' }}>
+        <Text style={{ fontSize: 12.5, color: '#64748B', fontWeight: '600' }}>Role:</Text>
+        <View style={{ backgroundColor: C.accentSoft, paddingHorizontal: 8, paddingVertical: 2, borderRadius: RADIUS.pill }}>
+          <Text style={{ fontSize: 12, fontWeight: '800', color: C.accentInk }}>{role}</Text>
+        </View>
+      </View>
+    ) : null}
+  </View>
+);
+
 export const fmt = (iso) => {
   if (!iso) return '-';
   const d = new Date(iso);
+  if (isNaN(d.getTime())) return String(iso);
   const diffMin = Math.round((Date.now() - d.getTime()) / 60000);
   if (diffMin < 1) return 'Just now';
   if (diffMin < 60) return `${diffMin}m ago`;
   if (diffMin < 24 * 60) return `${Math.round(diffMin / 60)}h ago`;
   return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) + ' · ' + d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
+};
+
+fmt.relTime = (iso) => fmt(iso);
+fmt.date = (iso) => {
+  if (!iso) return '-';
+  const d = new Date(iso);
+  return isNaN(d.getTime()) ? String(iso) : d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+};
+fmt.time = (iso) => {
+  if (!iso) return '-';
+  const d = new Date(iso);
+  return isNaN(d.getTime()) ? String(iso) : d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
 };
 
 export const Screen = ({ title, subtitle, right, roleBadge, children }) => (

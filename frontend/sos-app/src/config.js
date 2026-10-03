@@ -1,14 +1,16 @@
 import { Platform } from 'react-native';
 
-// Your PC's Wi-Fi IPv4 from ipconfig.
-// When testing on Android Emulator: uses 10.0.2.2.
-// When testing on Web/Desktop: uses localhost.
-// When testing on Physical Device via Expo Go: uses Wi-Fi IPv4 (10.105.169.48).
+// Production URL (via EXPO_PUBLIC_API_URL environment variable or deployed domain)
+// Development: Localhost for web, Wi-Fi IP for physical Android/Expo Go, or 10.0.2.2 for emulator.
 
 const DEV_MACHINE_IP = '10.105.169.48';
 const PORT = '8000';
 
 function getBackendUrl() {
+  if (process.env.EXPO_PUBLIC_API_URL) {
+    const raw = process.env.EXPO_PUBLIC_API_URL.replace(/\/+$/, '');
+    return raw.endsWith('/api/auth') ? raw : `${raw}/api/auth`;
+  }
   if (Platform.OS === 'web') {
     return `http://localhost:${PORT}/api/auth`;
   }

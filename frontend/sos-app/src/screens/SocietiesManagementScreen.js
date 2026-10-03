@@ -11,7 +11,7 @@ import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import Header from '../components/Header';
 import ActionModal from '../components/ActionModal';
-import { Card, Btn, Field, Empty, SkeletonList, C, SPACE, RADIUS, fmt } from '../ui';
+import { Card, Btn, Chip, Field, Empty, SkeletonList, C, SPACE, RADIUS, IdBadge, fmtSocId } from '../ui';
 import { useAuth } from '../AuthContext';
 import { useToast } from '../Toast';
 import api, { errorText } from '../api';
@@ -38,7 +38,7 @@ export default function SocietiesManagementScreen({ navigation }) {
   const loadSocieties = useCallback(async () => {
     try {
       const { data } = await api.get('/gated-society/').catch(() => ({ data: [] }));
-      const list = Array.isArray(data) ? data : (data ? [data] : []);
+      const list = Array.isArray(data) ? data : (data?.results || (data ? [data] : []));
       setSocieties(list);
     } catch (e) {
       console.log('Societies load error:', e.message);
@@ -73,10 +73,11 @@ export default function SocietiesManagementScreen({ navigation }) {
 
       if (editingSociety?.id) {
         await api.patch(`/gated-society/${editingSociety.id}/edit/`, payload);
-        toast('Society details updated successfully', 'success');
+        toast(`Society ${editingSociety.society_name} (${fmtSocId(editingSociety.id)}) updated`, 'success');
       } else {
-        await api.post('/gated-society/add/', payload);
-        toast('Society created successfully', 'success');
+        const res = await api.post('/gated-society/add/', payload);
+        const createdId = res.data?.id;
+        toast(`Society created successfully: ${socForm.society_name} (${fmtSocId(createdId)})`, 'success');
       }
 
       setAddModal(false);
@@ -92,7 +93,7 @@ export default function SocietiesManagementScreen({ navigation }) {
   const handleDeleteSociety = (soc) => {
     Alert.alert(
       'Delete Society?',
-      `Are you sure you want to delete ${soc.society_name}? This action cannot be undone.`,
+      `Are you sure you want to delete ${soc.society_name} (${fmtSocId(soc.id)})? This will remove all associated blocks, flats, and records.`,
       [
         { text: 'Cancel', style: 'cancel' },
         {
@@ -101,7 +102,7 @@ export default function SocietiesManagementScreen({ navigation }) {
           onPress: async () => {
             try {
               await api.delete(`/gated-society/${soc.id}/delete/`);
-              toast('Society deleted', 'success');
+              toast(`Society ${fmtSocId(soc.id)} deleted`, 'success');
               loadSocieties();
             } catch (e) {
               Alert.alert('Delete Failed', errorText(e));
@@ -114,7 +115,7 @@ export default function SocietiesManagementScreen({ navigation }) {
 
   const handleAssignUser = async () => {
     if (!assignForm.user_id || !assignForm.gated_society) {
-      Alert.alert('Required Fields', 'Please enter User ID and Society ID.');
+      Alert.alert('Required Fields', 'Please select or enter User ID and Society.');
       return;
     }
 
@@ -140,7 +141,7 @@ export default function SocietiesManagementScreen({ navigation }) {
       society_name: soc.society_name || '',
       owner_name: soc.owner_name || '',
       incharge: soc.incharge || '',
-      sub_admin_username: '',
+      sub_admin_username: soc.sub_admin || '',
     });
     setAddModal(true);
   };
@@ -157,7 +158,7 @@ export default function SocietiesManagementScreen({ navigation }) {
         right={
           <Btn
             title="+ Add"
-            small
+            size="sm"
             kind="primary"
             onPress={() => {
               setEditingSociety(null);
@@ -173,7 +174,7 @@ export default function SocietiesManagementScreen({ navigation }) {
         <Btn
           title="Assign User to Society"
           kind="soft"
-          small
+          size="sm"
           onPress={() => setAssignModal(true)}
           icon={<Ionicons name="swap-horizontal" size={15} color={C.accentInk} />}
           style={{ flex: 1 }}
@@ -202,17 +203,23 @@ export default function SocietiesManagementScreen({ navigation }) {
         }
         renderItem={({ item }) => (
           <Card style={styles.socCard}>
-            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+            <View style={{ flexDirection: 'row', alignItems: 'flex-start' }}>
               <View style={styles.socIconWrap}>
                 <Ionicons name="business" size={22} color={C.purpleInk} />
               </View>
 
               <View style={{ flex: 1, marginLeft: 12 }}>
-                <Text style={styles.socName}>{item.society_name}</Text>
-                <Text style={styles.socOwner}>Owner: {item.owner_name}</Text>
-                <Text style={styles.socIncharge}>Incharge: {item.incharge}</Text>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                  <Text style={styles.socName}>{item.society_name}</Text>
+                  <IdBadge id={item.id} prefix="SOC" size="sm" />
+                </View>
+                <Text style={styles.socOwner}>Owner / Body: {item.owner_name}</Text>
+                <Text style={styles.socIncharge}>Facility Incharge: {item.incharge}</Text>
                 {item.sub_admin ? (
-                  <Text style={styles.socSubAdmin}>Sub Admin: {item.sub_admin}</Text>
+                  <View style={styles.subAdminRow}>
+                    <Ionicons name="person-circle" size={14} color={C.accent} />
+                    <Text style={styles.socSubAdmin}>Sub Admin: {item.sub_admin}</Text>
+                  </View>
                 ) : null}
               </View>
             </View>
@@ -221,7 +228,7 @@ export default function SocietiesManagementScreen({ navigation }) {
               <Btn
                 title="Edit"
                 kind="ghost"
-                small
+                size="sm"
                 onPress={() => openEdit(item)}
                 icon={<Ionicons name="create-outline" size={14} color={C.ink} />}
                 style={{ marginRight: 8 }}
@@ -229,7 +236,7 @@ export default function SocietiesManagementScreen({ navigation }) {
               <Btn
                 title="Delete"
                 kind="dangerGhost"
-                small
+                size="sm"
                 onPress={() => handleDeleteSociety(item)}
                 icon={<Ionicons name="trash-outline" size={14} color={C.sosInk} />}
               />
@@ -242,12 +249,18 @@ export default function SocietiesManagementScreen({ navigation }) {
       <ActionModal
         visible={addModal}
         onClose={() => setAddModal(false)}
-        title={editingSociety ? 'Edit Gated Society' : 'Register Gated Society'}
+        title={editingSociety ? `Edit Society (${fmtSocId(editingSociety.id)})` : 'Register Gated Society'}
         subtitle="Enter community details and administration incharge."
         submitText={editingSociety ? 'Save Changes' : 'Create Society'}
         loading={busy}
         onSubmit={handleSaveSociety}
       >
+        {editingSociety && (
+          <View style={styles.modalIdBadge}>
+            <Text style={styles.modalIdLabel}>Society Identifier:</Text>
+            <Text style={styles.modalIdVal}>{fmtSocId(editingSociety.id)} (Internal DB ID #{editingSociety.id})</Text>
+          </View>
+        )}
         <Field
           label="Society Name"
           value={socForm.society_name}
@@ -286,17 +299,32 @@ export default function SocietiesManagementScreen({ navigation }) {
         onSubmit={handleAssignUser}
       >
         <Field
-          label="User ID"
+          label="User ID (e.g. USR-012)"
           value={assignForm.user_id}
-          onChangeText={(v) => setAssignForm({ ...assignForm, user_id: v })}
-          placeholder="e.g. 12"
+          onChangeText={(v) => setAssignForm({ ...assignForm, user_id: v.replace(/[^0-9]/g, '') })}
+          placeholder="Enter numeric User ID (e.g. 12)"
           keyboardType="number-pad"
         />
+
+        <Text style={styles.pickerLabel}>Select Society:</Text>
+        {societies.length > 0 && (
+          <View style={styles.chipGrid}>
+            {societies.map((soc) => (
+              <Chip
+                key={soc.id}
+                label={`${soc.society_name} (${fmtSocId(soc.id)})`}
+                active={String(assignForm.gated_society) === String(soc.id)}
+                onPress={() => setAssignForm({ ...assignForm, gated_society: String(soc.id) })}
+              />
+            ))}
+          </View>
+        )}
+
         <Field
-          label="Gated Society ID"
+          label="Or Enter Society ID directly"
           value={assignForm.gated_society}
-          onChangeText={(v) => setAssignForm({ ...assignForm, gated_society: v })}
-          placeholder="e.g. 1"
+          onChangeText={(v) => setAssignForm({ ...assignForm, gated_society: v.replace(/[^0-9]/g, '') })}
+          placeholder="e.g. 6"
           keyboardType="number-pad"
         />
       </ActionModal>
@@ -336,11 +364,16 @@ const styles = StyleSheet.create({
     color: C.ink3,
     marginTop: 1,
   },
+  subAdminRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginTop: 3,
+  },
   socSubAdmin: {
     fontSize: 12,
     color: C.accentInk,
     fontWeight: '700',
-    marginTop: 2,
   },
   cardActions: {
     flexDirection: 'row',
@@ -349,5 +382,37 @@ const styles = StyleSheet.create({
     paddingTop: SPACE.sm,
     borderTopWidth: 1,
     borderTopColor: C.lineLight,
+  },
+  modalIdBadge: {
+    backgroundColor: '#EFF6FF',
+    padding: 10,
+    borderRadius: RADIUS.sm,
+    marginBottom: SPACE.md,
+    borderWidth: 1,
+    borderColor: '#BFDBFE',
+  },
+  modalIdLabel: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: C.accent,
+    textTransform: 'uppercase',
+  },
+  modalIdVal: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: C.ink,
+    marginTop: 2,
+  },
+  pickerLabel: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: C.ink2,
+    marginBottom: 6,
+  },
+  chipGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+    marginBottom: SPACE.md,
   },
 });

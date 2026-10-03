@@ -31,13 +31,34 @@ def send_sms(to_number, body):
         return False
 
 def send_invite_email(invite):
-    link = f"{settings.FRONTEND_BASE_URL}/api/auth/register/invite/{invite.token}/"
-    send_mail(
-        subject="You're invited to join Emergency Response Platform",
-        message=f"Click the link to complete your registration:\n\n{link}",
-        from_email=None,
-        recipient_list=[invite.email],
+    base_url = getattr(settings, 'FRONTEND_BASE_URL', 'http://10.105.169.48:8000')
+    if base_url:
+        base_url = base_url.rstrip('/')
+    else:
+        base_url = 'http://10.105.169.48:8000'
+    link = f"{base_url}/api/auth/register/invite/{invite.token}/"
+    app_deep_link = f"sosapp://register?token={invite.token}"
+
+    society_info = f"\nSociety: {invite.gated_society.society_name} (ID: {invite.gated_society.id})" if invite.gated_society else ""
+    flat_info = f"\nFlat: {invite.flat.flat_number} (ID: {invite.flat.id})" if invite.flat else ""
+
+    subject = f"Invitation: Join Emergency Response Platform ({invite.group.name})"
+    body = (
+        f"Hello,\n\n"
+        f"You have been invited to join the Emergency Response Network as a {invite.group.name}."
+        f"{society_info}{flat_info}\n\n"
+        f"Web Registration Link:\n{link}\n\n"
+        f"Mobile App Deep Link (Expo/Android):\n{app_deep_link}\n\n"
     )
+    try:
+        send_mail(
+            subject=subject,
+            message=body,
+            from_email=None,
+            recipient_list=[invite.email],
+        )
+    except Exception as e:
+        print(f"Invite email failed to send: {e}")
 
 
 def notify_user(sos, recipient):
@@ -174,18 +195,33 @@ def notify_next_stage(sos):
     return level
 
 def route_sos_notifications(sos):
-    from .tasks import send_next_stage   # imported here to avoid a circular import
-    send_next_stage.delay(sos.id)
+    if getattr(settings, 'CELERY_TASK_ALWAYS_EAGER', False):
+        notify_next_stage(sos)
+        return
+    try:
+        from .tasks import send_next_stage
+        send_next_stage.delay(sos.id)
+    except Exception as e:
+        print(f"[warning] Celery broker unreachable or not running, notifying synchronously: {e}")
+        notify_next_stage(sos)
 
 class ProfileSerializer(serializers.ModelSerializer):
     group_name = serializers.CharField(source="group.name", read_only=True)
+    society_name = serializers.CharField(source="gated_society.society_name", read_only=True)
+    flat_id = serializers.IntegerField(source="flat.id", read_only=True)
+    flat_number = serializers.CharField(source="flat.flat_number", read_only=True)
+    block_id = serializers.IntegerField(source="flat.block.id", read_only=True)
+    block_name = serializers.CharField(source="flat.block.name", read_only=True)
+    block_code = serializers.CharField(source="flat.block.code", read_only=True)
 
     class Meta:
         model = CustomUser
         fields = [
             "id", "username", "email", "mobile", "first_name", "last_name",
             "emergency_contact1", "emergency_contact2", "emergency_contact3",
-            "gated_society", "group", "group_name",
+            "gated_society", "society_name", "flat", "flat_id", "flat_number",
+            "block_id", "block_name", "block_code", "group", "group_name",
+            "available", "last_latitude", "last_longitude",
         ]
 
 
@@ -375,17 +411,46 @@ class RegisterViaInviteSerializer(serializers.ModelSerializer):
 
 
 class BlockSerializer(serializers.ModelSerializer):
+    society_name = serializers.CharField(source="gated_society.society_name", read_only=True)
+
     class Meta:
         model = Block
-        fields = ["id", "gated_society", "name", "code"]
+        fields = ["id", "gated_society", "society_name", "name", "code"]
 
 
 class FlatSerializer(serializers.ModelSerializer):
     guardian = serializers.StringRelatedField(read_only=True)
+    guardian_id = serializers.IntegerField(source="guardian.id", read_only=True)
+    guardian_username = serializers.CharField(source="guardian.username", read_only=True)
+    block_name = serializers.CharField(source="block.name", read_only=True)
+    block_code = serializers.CharField(source="block.code", read_only=True)
+    society_id = serializers.IntegerField(source="block.gated_society.id", read_only=True)
+    society_name = serializers.CharField(source="block.gated_society.society_name", read_only=True)
 
     class Meta:
         model = Flat
-        fields = ["id", "block", "flat_number", "floor", "flat_type", "guardian"]
+        fields = [
+            "id", "block", "block_name", "block_code", "society_id", "society_name",
+            "flat_number", "floor", "flat_type", "guardian", "guardian_id", "guardian_username"
+        ]
+
+
+class InviteSerializer(serializers.ModelSerializer):
+    role = serializers.CharField(source="group.name", read_only=True)
+    group_name = serializers.CharField(source="group.name", read_only=True)
+    society_name = serializers.CharField(source="gated_society.society_name", read_only=True)
+    block_id = serializers.IntegerField(source="flat.block.id", read_only=True)
+    block_name = serializers.CharField(source="flat.block.name", read_only=True)
+    flat_number = serializers.CharField(source="flat.flat_number", read_only=True)
+    invited_by_username = serializers.CharField(source="invited_by.username", read_only=True)
+
+    class Meta:
+        model = Invite
+        fields = [
+            "id", "email", "role", "group_name", "gated_society", "society_name",
+            "flat", "flat_number", "block_id", "block_name", "invited_by",
+            "invited_by_username", "token", "is_used", "created_at"
+        ]
 
 
 
@@ -544,16 +609,41 @@ class ResetPasswordSerializer(serializers.Serializer):
 
 
 class TriggerSOSSerializer(serializers.ModelSerializer):
+    user = serializers.StringRelatedField(read_only=True)
+    user_name = serializers.CharField(source="user.username", read_only=True)
+    user_id = serializers.IntegerField(source="user.id", read_only=True)
+    society_id = serializers.IntegerField(source="user.gated_society.id", read_only=True)
+    society_name = serializers.CharField(source="user.gated_society.society_name", read_only=True)
+    flat_id = serializers.IntegerField(source="user.flat.id", read_only=True)
+    flat_number = serializers.CharField(source="user.flat.flat_number", read_only=True)
+    block_id = serializers.IntegerField(source="user.flat.block.id", read_only=True)
+    block_name = serializers.CharField(source="user.flat.block.name", read_only=True)
+    responder = serializers.StringRelatedField(read_only=True)
+    responder_name = serializers.CharField(source="responder.username", read_only=True)
+    responder_id = serializers.IntegerField(source="responder.id", read_only=True)
+
     class Meta:
         model = SOSAlert
-        fields = ["id", "category", "message", "latitude", "longitude", "status", "created_at"]
-        read_only_fields = ["status", "created_at"]
+        fields = [
+            "id", "user", "user_id", "user_name", "category", "message",
+            "latitude", "longitude", "status", "responder", "responder_id", "responder_name",
+            "escalation_level", "society_id", "society_name", "flat_id", "flat_number",
+            "block_id", "block_name", "created_at", "resolved_at"
+        ]
+        read_only_fields = ["status", "created_at", "escalation_level", "resolved_at", "user", "responder"]
 
     def create(self, validated_data):
         user = self.context["request"].user
         sos = SOSAlert.objects.create(user=user, **validated_data)
         log_incident(sos, "incident_created", user)
-        route_sos_notifications(sos)
+        try:
+            route_sos_notifications(sos)
+        except Exception as e:
+            print(f"Async escalation notification route warning (Celery/Redis): {e}")
+            try:
+                notify_next_stage(sos)
+            except Exception as e2:
+                print(f"Sync fallback notify warning: {e2}")
         return sos
 
 
@@ -613,12 +703,33 @@ class AcceptSOSSerializer(serializers.Serializer):
 
 class SOSDetailSerializer(serializers.ModelSerializer):
     user = serializers.StringRelatedField()
+    user_id = serializers.IntegerField(source="user.id", read_only=True)
+    user_name = serializers.CharField(source="user.username", read_only=True)
+    user_email = serializers.CharField(source="user.email", read_only=True)
+    user_mobile = serializers.CharField(source="user.mobile", read_only=True)
     responder = serializers.StringRelatedField()
+    responder_id = serializers.IntegerField(source="responder.id", read_only=True)
+    responder_name = serializers.CharField(source="responder.username", read_only=True)
+    responder_mobile = serializers.CharField(source="responder.mobile", read_only=True)
+    responder_latitude = serializers.DecimalField(source="responder.last_latitude", max_digits=9, decimal_places=6, read_only=True)
+    responder_longitude = serializers.DecimalField(source="responder.last_longitude", max_digits=9, decimal_places=6, read_only=True)
+    society_id = serializers.IntegerField(source="user.gated_society.id", read_only=True)
+    society_name = serializers.CharField(source="user.gated_society.society_name", read_only=True)
+    block_id = serializers.IntegerField(source="user.flat.block.id", read_only=True)
+    block_name = serializers.CharField(source="user.flat.block.name", read_only=True)
+    flat_id = serializers.IntegerField(source="user.flat.id", read_only=True)
+    flat_number = serializers.CharField(source="user.flat.flat_number", read_only=True)
 
     class Meta:
         model = SOSAlert
-        fields = ["id", "user", "category", "message", "latitude", "longitude",
-                  "status", "responder", "created_at", "resolved_at"]
+        fields = [
+            "id", "user", "user_id", "user_name", "user_email", "user_mobile",
+            "category", "message", "latitude", "longitude", "status",
+            "responder", "responder_id", "responder_name", "responder_mobile",
+            "responder_latitude", "responder_longitude",
+            "society_id", "society_name", "block_id", "block_name", "flat_id", "flat_number",
+            "escalation_level", "created_at", "resolved_at"
+        ]
 
 
 class IncidentHistorySerializer(serializers.ModelSerializer):

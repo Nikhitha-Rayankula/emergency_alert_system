@@ -1,7 +1,7 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Card, StatusBadge, CategoryBadge, C, SPACE, RADIUS, fmt, Btn } from '../ui';
+import { Card, StatusBadge, CategoryBadge, C, SPACE, RADIUS, fmt, Btn, IdBadge, fmtSosId, fmtSocId, fmtFltId } from '../ui';
 
 export default function IncidentCard({
   incident,
@@ -20,7 +20,10 @@ export default function IncidentCard({
       style={styles.card}
     >
       <View style={styles.topRow}>
-        <CategoryBadge category={incident.category} small />
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+          <CategoryBadge category={incident.category} small />
+          <IdBadge id={incident.id} prefix="SOS" size="sm" />
+        </View>
         <StatusBadge status={incident.status} small />
       </View>
 
@@ -35,6 +38,14 @@ export default function IncidentCard({
             </Text>
           ) : (
             <Text style={styles.subText}>Location broadcast active</Text>
+          )}
+
+          {/* Society & Flat info if available */}
+          {(incident.society_name || incident.flat_number) && (
+            <Text style={styles.locSubText}>
+              📍 {incident.society_name || `Society #${incident.society_id || ''}`}
+              {incident.flat_number ? ` • Flat ${incident.flat_number}` : ''}
+            </Text>
           )}
         </View>
 
@@ -65,7 +76,7 @@ export default function IncidentCard({
           <Btn
             title="Accept & Navigate"
             kind="safe"
-            small
+            size="sm"
             loading={acceptLoading}
             onPress={onAccept}
             icon={<Ionicons name="navigate-circle" size={16} color="#fff" />}
@@ -80,6 +91,7 @@ export default function IncidentCard({
 const styles = StyleSheet.create({
   card: {
     padding: SPACE.md,
+    marginBottom: SPACE.sm,
   },
   topRow: {
     flexDirection: 'row',
@@ -108,6 +120,12 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: C.muted,
     marginTop: 2,
+  },
+  locSubText: {
+    fontSize: 11.5,
+    color: C.accentInk,
+    fontWeight: '600',
+    marginTop: 3,
   },
   distanceBadge: {
     flexDirection: 'row',
