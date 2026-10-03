@@ -13,8 +13,13 @@ https://docs.djangoproject.com/en/6.1/ref/settings/
 from pathlib import Path
 from decouple import config
 from datetime import timedelta
+import dj_database_url
 
-ALLOWED_HOSTS = ["*"]   # dev only, lets your phone reach Django over Wi-Fi
+ALLOWED_HOSTS = config(
+    'ALLOWED_HOSTS',
+    default='localhost,127.0.0.1',
+    cast=lambda v: [s.strip() for s in v.split(',')]
+) 
 FRONTEND_BASE_URL = config('FRONTEND_BASE_URL', default='http://10.105.169.48:8000')
 
 SIMPLE_JWT = {
@@ -33,7 +38,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 SECRET_KEY = config('SECRET_KEY')
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = config('DEBUG', default=True, cast=bool)
+DEBUG = config('DEBUG', default=False, cast=bool)
 
 
 
@@ -103,7 +108,15 @@ WSGI_APPLICATION = 'config.wsgi.application'
 # https://docs.djangoproject.com/en/6.1/ref/settings/#databases
 
 DATABASES = {
-    'default': {
+    'default': dj_database_url.config(
+        default=None,
+        conn_max_age=600,
+        ssl_require=not DEBUG,
+    )
+}
+
+if not DATABASES['default']:
+    DATABASES['default'] = {
         'ENGINE': 'django.db.backends.postgresql',
         'NAME': config('DB_NAME'),
         'USER': config('DB_USER'),
@@ -111,7 +124,8 @@ DATABASES = {
         'HOST': config('DB_HOST'),
         'PORT': config('DB_PORT'),
     }
-}
+
+
 
 EMAIL_BACKEND = "django.core.mail.backends.smtp.EmailBackend"
 EMAIL_HOST = config('EMAIL_HOST')
@@ -174,8 +188,16 @@ FIREBASE_CREDENTIALS_PATH = BASE_DIR / "firebase-credentials.json"
 
 
 
-CELERY_BROKER_URL = 'redis://localhost:6379/0'
-CELERY_RESULT_BACKEND = 'redis://localhost:6379/0'
+CELERY_BROKER_URL = config(
+    'REDIS_URL',
+    default='redis://localhost:6379/0'
+)
+
+CELERY_RESULT_BACKEND = config(
+    'REDIS_URL',
+    default='redis://localhost:6379/0'
+)
 CELERY_BEAT_SCHEDULER = 'django_celery_beat.schedulers:DatabaseScheduler'
+
 
 
