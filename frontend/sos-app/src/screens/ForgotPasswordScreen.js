@@ -11,7 +11,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { Card, Btn, Field, C, SPACE, RADIUS } from '../ui';
+import { Card, Btn, Field, PasswordField, C, SPACE, RADIUS } from '../ui';
 import api, { errorText } from '../api';
 import { useAuth } from '../AuthContext';
 import { useToast } from '../Toast';
@@ -266,19 +266,17 @@ export default function ForgotPasswordScreen({ navigation }) {
 
             {step === 3 && (
               <>
-                <Field
+                <PasswordField
                   label="New Password (min 8 characters)"
                   value={newPassword}
                   onChangeText={setNewPassword}
-                  secureTextEntry
                   placeholder="Enter new password"
                 />
 
-                <Field
+                <PasswordField
                   label="Confirm New Password"
                   value={confirmPassword}
                   onChangeText={setConfirmPassword}
-                  secureTextEntry
                   placeholder="Re-enter new password"
                 />
 

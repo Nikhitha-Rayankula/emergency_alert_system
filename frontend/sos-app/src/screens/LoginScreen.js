@@ -11,7 +11,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { Card, Btn, Field, C, SPACE, RADIUS } from '../ui';
+import { Card, Btn, Field, PasswordField, C, SPACE, RADIUS } from '../ui';
 import { useAuth } from '../AuthContext';
 import { errorText } from '../api';
 import { useToast } from '../Toast';
@@ -75,11 +75,10 @@ export default function LoginScreen({ navigation }) {
               placeholder="you@example.com"
             />
 
-            <Field
+            <PasswordField
               label="Password"
               value={password}
               onChangeText={setPassword}
-              secureTextEntry
               placeholder="Enter your password"
             />
 

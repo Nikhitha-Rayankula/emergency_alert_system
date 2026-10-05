@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useRef } from 'react';
 import { View, Text, TouchableOpacity, TextInput, ActivityIndicator, StyleSheet, Dimensions, Platform } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
@@ -369,6 +369,154 @@ export const Field = ({ label, error, hint, style, ...props }) => (
   </View>
 );
 
+export const PasswordField = ({
+  label,
+  value = '',
+  onChangeText,
+  error,
+  hint,
+  style,
+  inputStyle,
+  placeholder,
+  ...props
+}) => {
+  const [showPassword, setShowPassword] = useState(false);
+  const selectionRef = useRef({ start: 0, end: 0 });
+  const BULLET = '\u2022';
+
+  const raw = value || '';
+  const displayValue = showPassword ? raw : BULLET.repeat(raw.length);
+
+  const { secureTextEntry: _ignored, ...restProps } = props;
+
+  const handleSelectionChange = (e) => {
+    selectionRef.current = e.nativeEvent.selection;
+    if (props.onSelectionChange) {
+      props.onSelectionChange(e);
+    }
+  };
+
+  const handleChangeText = (text) => {
+    if (!onChangeText) return;
+
+    if (showPassword) {
+      onChangeText(text);
+      return;
+    }
+
+    const currentRaw = value || '';
+    const displayed = BULLET.repeat(currentRaw.length);
+
+    // If user cleared the field
+    if (!text) {
+      onChangeText('');
+      return;
+    }
+
+    // No change
+    if (text === displayed) {
+      return;
+    }
+
+    // Standard typing at end
+    if (text.startsWith(displayed)) {
+      const appended = text.slice(displayed.length);
+      onChangeText(currentRaw + appended);
+      return;
+    }
+
+    // Standard backspace at end
+    if (displayed.startsWith(text)) {
+      const deletedCount = displayed.length - text.length;
+      onChangeText(currentRaw.slice(0, Math.max(0, currentRaw.length - deletedCount)));
+      return;
+    }
+
+    // General case: Count leading and trailing bullets
+    let leadingBullets = 0;
+    while (leadingBullets < text.length && text[leadingBullets] === BULLET) {
+      leadingBullets++;
+    }
+
+    let trailingBullets = 0;
+    while (
+      trailingBullets < (text.length - leadingBullets) &&
+      text[text.length - 1 - trailingBullets] === BULLET
+    ) {
+      trailingBullets++;
+    }
+
+    const inserted = text.slice(leadingBullets, text.length - trailingBullets);
+
+    // If only bullets exist, a deletion occurred in middle
+    if (inserted.length === 0) {
+      const sel = selectionRef.current;
+      if (sel && sel.start > 0 && sel.start <= currentRaw.length) {
+        if (sel.start === sel.end) {
+          const delIdx = sel.start - 1;
+          const newRaw = currentRaw.slice(0, delIdx) + currentRaw.slice(delIdx + 1);
+          onChangeText(newRaw);
+          return;
+        } else {
+          const newRaw = currentRaw.slice(0, sel.start) + currentRaw.slice(sel.end);
+          onChangeText(newRaw);
+          return;
+        }
+      }
+      const diff = currentRaw.length - text.length;
+      if (diff > 0) {
+        onChangeText(currentRaw.slice(0, text.length));
+        return;
+      }
+    }
+
+    // Middle insertion / replacement
+    const leadingPart = currentRaw.slice(0, leadingBullets);
+    const trailingPart = trailingBullets > 0 ? currentRaw.slice(currentRaw.length - trailingBullets) : '';
+    const newRaw = leadingPart + inserted + trailingPart;
+    onChangeText(newRaw);
+  };
+
+  return (
+    <View style={[{ marginBottom: SPACE.md }, style]}>
+      {label ? <Text style={s.label}>{label}</Text> : null}
+      <View
+        style={[
+          s.passwordContainer,
+          error && { borderColor: C.sos, backgroundColor: C.sosSoft },
+        ]}
+      >
+        <TextInput
+          placeholderTextColor={C.faint}
+          autoCapitalize="none"
+          autoCorrect={false}
+          style={[s.passwordInput, inputStyle]}
+          value={displayValue}
+          onChangeText={handleChangeText}
+          onSelectionChange={handleSelectionChange}
+          placeholder={placeholder}
+          {...restProps}
+        />
+        <TouchableOpacity
+          style={s.eyeBtn}
+          onPress={() => setShowPassword((prev) => !prev)}
+          activeOpacity={0.7}
+          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+          accessibilityLabel={showPassword ? 'Hide password' : 'Show password'}
+          accessibilityRole="button"
+        >
+          <Ionicons
+            name={showPassword ? 'eye-off-outline' : 'eye-outline'}
+            size={20}
+            color={C.muted}
+          />
+        </TouchableOpacity>
+      </View>
+      {error ? <Text style={s.errorText}>{error}</Text> : hint ? <Text style={s.hintText}>{hint}</Text> : null}
+    </View>
+  );
+};
+
 export const Chip = ({ label, active, onPress, tone = 'ink', icon }) => {
   const activeBg = tone === 'sos' ? C.sos : C.ink;
   return (
@@ -520,6 +668,26 @@ const s = StyleSheet.create({
     padding: 12,
     fontSize: 14.5,
     color: C.ink,
+  },
+  passwordContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1.2,
+    borderColor: C.line,
+    borderRadius: RADIUS.sm,
+  },
+  passwordInput: {
+    flex: 1,
+    padding: 12,
+    fontSize: 14.5,
+    color: C.ink,
+  },
+  eyeBtn: {
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   errorText: { color: C.sos, fontSize: 12, marginTop: 4, fontWeight: '600' },
   hintText: { color: C.muted, fontSize: 12, marginTop: 4 },

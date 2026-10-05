@@ -4,7 +4,7 @@ import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import Header from '../components/Header';
 import ActionModal from '../components/ActionModal';
-import { Card, Btn, Field, Empty, SkeletonList, C, SPACE, RADIUS } from '../ui';
+import { Card, Btn, Field, PasswordField, Empty, SkeletonList, C, SPACE, RADIUS } from '../ui';
 import { useAuth } from '../AuthContext';
 import { useToast } from '../Toast';
 import api, { errorText } from '../api';
@@ -161,12 +161,11 @@ export default function FlatMembersScreen({ navigation }) {
           placeholder="+91 9876543210"
           keyboardType="phone-pad"
         />
-        <Field
+        <PasswordField
           label="Password (min 8 characters)"
           value={form.password}
           onChangeText={(v) => setForm({ ...form, password: v })}
           placeholder="Set a password"
-          secureTextEntry
         />
       </ActionModal>
     </View>

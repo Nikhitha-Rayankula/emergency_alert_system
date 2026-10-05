@@ -12,7 +12,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { Card, Btn, Field, Chip, C, SPACE, RADIUS, IdBadge, HierarchySummary, fmtSocId, fmtBlkId, fmtFltId } from '../ui';
+import { Card, Btn, Field, PasswordField, Chip, C, SPACE, RADIUS, IdBadge, HierarchySummary, fmtSocId, fmtBlkId, fmtFltId } from '../ui';
 import api, { errorText } from '../api';
 import { useToast } from '../Toast';
 
@@ -356,11 +356,10 @@ export default function RegisterScreen({ navigation, route }) {
                     placeholder="+91 9876543210"
                   />
 
-                  <Field
+                  <PasswordField
                     label="Password (min 8 chars)"
                     value={f.password}
                     onChangeText={set('password')}
-                    secureTextEntry
                     placeholder="Create a password"
                   />
 
